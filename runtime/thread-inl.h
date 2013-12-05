@@ -66,7 +66,7 @@ inline void Thread::TransitionFromRunnableToSuspended(ThreadState new_state) {
   union StateAndFlags old_state_and_flags;
   union StateAndFlags new_state_and_flags;
   do {
-    old_state_and_flags = state_and_flags_;
+    old_state_and_flags.as_int = state_and_flags_.as_int;
     // Copy over flags and try to clear the checkpoint bit if it is set.
     new_state_and_flags.as_struct.flags = old_state_and_flags.as_struct.flags & ~kCheckpointRequest;
     new_state_and_flags.as_struct.state = new_state;
