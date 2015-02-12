@@ -26,8 +26,8 @@
 // Offset of field Thread::tlsPtr_.exception verified in InitCpu
 #define THREAD_EXCEPTION_OFFSET 124
 
-#define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 64
-#define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 64
+#define FRAME_SIZE_SAVE_ALL_CALLEE_SAVE 48
+#define FRAME_SIZE_REFS_ONLY_CALLEE_SAVE 48
 #define FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE 64
 
 // Expected size of a heap reference

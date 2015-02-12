@@ -26,134 +26,130 @@
     /* Deliver an exception pending on a thread */
     .extern artDeliverPendingExceptionFromCode
 
+#define ARG_SLOT_SIZE   32    // space for a0-a3 plus 4 more words
+
     /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kSaveAll)
-     * callee-save: $s0-$s8 + $gp + $ra, 11 total + 1 word padding + 4 open words for args
+     * Callee-save: $s0-$s8 + $gp + $ra, 11 total + 1 word for Method*
+     * Clobbers $t0 and $sp
+     * Allocates ARG_SLOT_SIZE bytes at the bottom of the stack for arg slots.
+     * Reserves FRAME_SIZE_SAVE_ALL_CALLEE_SAVE + ARG_SLOT_SIZE bytes on the stack
      */
 .macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
-    addiu  $sp, $sp, -64
-    .cfi_adjust_cfa_offset 64
+    addiu  $sp, $sp, -48
+    .cfi_adjust_cfa_offset 48
 
      // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 64)
+#if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 48)
 #error "SAVE_ALL_CALLEE_SAVE_FRAME(MIPS) size not as expected."
 #endif
 
-    sw     $ra, 60($sp)
-    .cfi_rel_offset 31, 60
-    sw     $s8, 56($sp)
-    .cfi_rel_offset 30, 56
-    sw     $gp, 52($sp)
-    .cfi_rel_offset 28, 52
-    sw     $s7, 48($sp)
-    .cfi_rel_offset 23, 48
-    sw     $s6, 44($sp)
-    .cfi_rel_offset 22, 44
-    sw     $s5, 40($sp)
-    .cfi_rel_offset 21, 40
-    sw     $s4, 36($sp)
-    .cfi_rel_offset 20, 36
-    sw     $s3, 32($sp)
-    .cfi_rel_offset 19, 32
-    sw     $s2, 28($sp)
-    .cfi_rel_offset 18, 28
-    sw     $s1, 24($sp)
-    .cfi_rel_offset 17, 24
-    sw     $s0, 20($sp)
-    .cfi_rel_offset 16, 20
-    # 1 word for alignment, 4 open words for args $a0-$a3, bottom will hold Method*
+    sw     $ra, 44($sp)
+    .cfi_rel_offset 31, 44
+    sw     $s8, 40($sp)
+    .cfi_rel_offset 30, 40
+    sw     $gp, 36($sp)
+    .cfi_rel_offset 28, 36
+    sw     $s7, 32($sp)
+    .cfi_rel_offset 23, 32
+    sw     $s6, 28($sp)
+    .cfi_rel_offset 22, 28
+    sw     $s5, 24($sp)
+    .cfi_rel_offset 21, 24
+    sw     $s4, 20($sp)
+    .cfi_rel_offset 20, 20
+    sw     $s3, 16($sp)
+    .cfi_rel_offset 19, 16
+    sw     $s2, 12($sp)
+    .cfi_rel_offset 18, 12
+    sw     $s1, 8($sp)
+    .cfi_rel_offset 17, 8
+    sw     $s0, 4($sp)
+    .cfi_rel_offset 16, 4
+    # 1 word for holding Method*
+    addiu  $sp, $sp, -ARG_SLOT_SIZE               # reserve argument slots on the stack
+    .cfi_adjust_cfa_offset ARG_SLOT_SIZE
 .endm
 
     /*
      * Macro that sets up the callee save frame to conform with
      * Runtime::CreateCalleeSaveMethod(kRefsOnly). Restoration assumes non-moving GC.
      * Does not include rSUSPEND or rSELF
-     * callee-save: $s2-$s8 + $gp + $ra, 9 total + 3 words padding + 4 open words for args
+     * callee-save: $s2-$s8 + $gp + $ra, 9 total + 2 words padding + 1 word to hold Method*
+     * Clobbers $t0 and $sp
+     * Allocates ARG_SLOT_SIZE bytes at the bottom of the stack for arg slots.
+     * Reserves FRAME_SIZE_REFS_ONLY_CALLEE_SAVE + ARG_SLOT_SIZE bytes on the stack
      */
 .macro SETUP_REF_ONLY_CALLEE_SAVE_FRAME
-    addiu  $sp, $sp, -64
-    .cfi_adjust_cfa_offset 64
+    addiu  $sp, $sp, -48
+    .cfi_adjust_cfa_offset 48
 
     // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 64)
+#if (FRAME_SIZE_REFS_ONLY_CALLEE_SAVE != 48)
 #error "REFS_ONLY_CALLEE_SAVE_FRAME(MIPS) size not as expected."
 #endif
 
-    sw     $ra, 60($sp)
-    .cfi_rel_offset 31, 60
-    sw     $s8, 56($sp)
-    .cfi_rel_offset 30, 56
-    sw     $gp, 52($sp)
-    .cfi_rel_offset 28, 52
-    sw     $s7, 48($sp)
-    .cfi_rel_offset 23, 48
-    sw     $s6, 44($sp)
-    .cfi_rel_offset 22, 44
-    sw     $s5, 40($sp)
-    .cfi_rel_offset 21, 40
-    sw     $s4, 36($sp)
-    .cfi_rel_offset 20, 36
-    sw     $s3, 32($sp)
-    .cfi_rel_offset 19, 32
-    sw     $s2, 28($sp)
-    .cfi_rel_offset 18, 28
-    # 3 words for alignment and extra args, 4 open words for args $a0-$a3, bottom will hold Method*
+    sw     $ra, 44($sp)
+    .cfi_rel_offset 31, 44
+    sw     $s8, 40($sp)
+    .cfi_rel_offset 30, 40
+    sw     $gp, 36($sp)
+    .cfi_rel_offset 28, 36
+    sw     $s7, 32($sp)
+    .cfi_rel_offset 23, 32
+    sw     $s6, 28($sp)
+    .cfi_rel_offset 22, 28
+    sw     $s5, 24($sp)
+    .cfi_rel_offset 21, 24
+    sw     $s4, 20($sp)
+    .cfi_rel_offset 20, 20
+    sw     $s3, 16($sp)
+    .cfi_rel_offset 19, 16
+    sw     $s2, 12($sp)
+    .cfi_rel_offset 18, 12
+    # 2 words for alignment and bottom word will hold Method*
+    addiu  $sp, $sp, -ARG_SLOT_SIZE               # reserve argument slots on the stack
+    .cfi_adjust_cfa_offset ARG_SLOT_SIZE
 .endm
 
 .macro RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
-    lw     $ra, 60($sp)
+    addiu  $sp, $sp, ARG_SLOT_SIZE                # remove argument slots on the stack
+    .cfi_adjust_cfa_offset -ARG_SLOT_SIZE
+    lw     $ra, 44($sp)
     .cfi_restore 31
-    lw     $s8, 56($sp)
+    lw     $s8, 40($sp)
     .cfi_restore 30
-    lw     $gp, 52($sp)
+    lw     $gp, 36($sp)
     .cfi_restore 28
-    lw     $s7, 48($sp)
+    lw     $s7, 32($sp)
     .cfi_restore 23
-    lw     $s6, 44($sp)
+    lw     $s6, 28($sp)
     .cfi_restore 22
-    lw     $s5, 40($sp)
+    lw     $s5, 24($sp)
     .cfi_restore 21
-    lw     $s4, 36($sp)
+    lw     $s4, 20($sp)
     .cfi_restore 20
-    lw     $s3, 32($sp)
+    lw     $s3, 16($sp)
     .cfi_restore 19
-    lw     $s2, 28($sp)
+    lw     $s2, 12($sp)
     .cfi_restore 18
-    addiu  $sp, $sp, 64
-    .cfi_adjust_cfa_offset -64
+    addiu  $sp, $sp, 48
+    .cfi_adjust_cfa_offset -48
 .endm
 
 .macro RESTORE_REF_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
-    lw     $ra, 60($sp)
-    .cfi_restore 31
-    lw     $s8, 56($sp)
-    .cfi_restore 30
-    lw     $gp, 52($sp)
-    .cfi_restore 28
-    lw     $s7, 48($sp)
-    .cfi_restore 23
-    lw     $s6, 44($sp)
-    .cfi_restore 22
-    lw     $s5, 40($sp)
-    .cfi_restore 21
-    lw     $s4, 36($sp)
-    .cfi_restore 20
-    lw     $s3, 32($sp)
-    .cfi_restore 19
-    lw     $s2, 28($sp)
-    .cfi_restore 18
+    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
     jr     $ra
-    addiu  $sp, $sp, 64
-    .cfi_adjust_cfa_offset -64
+    nop
 .endm
 
     /*
      * Macro that sets up the callee save frame to conform with
-     * Runtime::CreateCalleeSaveMethod(kRefsAndArgs). Restoration assumes non-moving GC.
+     * Runtime::CreateCalleeSaveMethod(kRefsAndArgs).
      * callee-save: $a1-$a3, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
      */
-.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_REGISTERS_ONLY
     addiu  $sp, $sp, -64
     .cfi_adjust_cfa_offset 64
 
@@ -189,7 +185,39 @@
     # bottom will hold Method*
 .endm
 
+    /*
+     * Macro that sets up the callee save frame to conform with
+     * Runtime::CreateCalleeSaveMethod(kRefsAndArgs). Restoration assumes non-moving GC.
+     * callee-save: $a1-$a3, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
+     * Clobbers $t0 and $sp
+     * Allocates ARG_SLOT_SIZE bytes at the bottom of the stack for arg slots.
+     * Reserves FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE + ARG_SLOT_SIZE bytes on the stack
+     */
+.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_REGISTERS_ONLY
+    addiu  $sp, $sp, -ARG_SLOT_SIZE               # reserve argument slots on the stack
+    .cfi_adjust_cfa_offset ARG_SLOT_SIZE
+.endm
+
+    /*
+     * Macro that sets up the callee save frame to conform with
+     * Runtime::CreateCalleeSaveMethod(kRefsAndArgs). Restoration assumes non-moving GC.
+     * callee-save: $a1-$a3, $s2-$s8 + $gp + $ra, 12 total + 3 words padding + method*
+     * Clobbers $sp
+     * Use $a0 as the Method* and loads it into bottom of stack.
+     * Allocates ARG_SLOT_SIZE bytes at the bottom of the stack for arg slots.
+     * Reserves FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE + ARG_SLOT_SIZE bytes on the stack
+     */
+.macro SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_A0
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_REGISTERS_ONLY
+    sw $a0, 0($sp)                                # Place Method* at bottom of stack.
+    addiu  $sp, $sp, -ARG_SLOT_SIZE               # reserve argument slots on the stack
+    .cfi_adjust_cfa_offset ARG_SLOT_SIZE
+.endm
+
 .macro RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    addiu  $sp, $sp, ARG_SLOT_SIZE                # remove argument slots on the stack
+    .cfi_adjust_cfa_offset -ARG_SLOT_SIZE
     lw     $ra, 60($sp)
     .cfi_restore 31
     lw     $s8, 56($sp)
@@ -227,7 +255,7 @@
     move    $a0, rSELF                   # pass Thread::Current
     la      $t9, artDeliverPendingExceptionFromCode
     jr      $t9                          # artDeliverPendingExceptionFromCode(Thread*, $sp)
-    move    $a1, $sp                     # pass $sp
+    addiu   $a1, $sp, ARG_SLOT_SIZE      # pass $sp (remove arg slots)
 .endm
 
 .macro RETURN_IF_NO_EXCEPTION
@@ -347,7 +375,7 @@ ENTRY art_quick_deliver_exception
     move $a1, rSELF                 # pass Thread::Current
     la   $t9, artDeliverExceptionFromCode
     jr   $t9                        # artDeliverExceptionFromCode(Throwable*, Thread*, $sp)
-    move $a2, $sp                   # pass $sp
+    addiu $a2, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_deliver_exception
 
     /*
@@ -361,7 +389,7 @@ ENTRY art_quick_throw_null_pointer_exception
     move $a0, rSELF                 # pass Thread::Current
     la   $t9, artThrowNullPointerExceptionFromCode
     jr   $t9                        # artThrowNullPointerExceptionFromCode(Thread*, $sp)
-    move $a1, $sp                   # pass $sp
+    addiu $a1, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_throw_null_pointer_exception
 
     /*
@@ -374,7 +402,7 @@ ENTRY art_quick_throw_div_zero
     move $a0, rSELF                 # pass Thread::Current
     la   $t9, artThrowDivZeroFromCode
     jr   $t9                        # artThrowDivZeroFromCode(Thread*, $sp)
-    move $a1, $sp                   # pass $sp
+    addiu $a1, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_throw_div_zero
 
     /*
@@ -388,7 +416,7 @@ ENTRY art_quick_throw_array_bounds
     move $a2, rSELF                 # pass Thread::Current
     la   $t9, artThrowArrayBoundsFromCode
     jr   $t9                        # artThrowArrayBoundsFromCode(index, limit, Thread*, $sp)
-    move $a3, $sp                   # pass $sp
+    addiu $a3, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_throw_array_bounds
 
     /*
@@ -401,7 +429,7 @@ ENTRY art_quick_throw_stack_overflow
     move $a0, rSELF                 # pass Thread::Current
     la   $t9, artThrowStackOverflowFromCode
     jr   $t9                        # artThrowStackOverflowFromCode(Thread*, $sp)
-    move $a1, $sp                   # pass $sp
+    addiu $a1, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_throw_stack_overflow
 
     /*
@@ -414,7 +442,7 @@ ENTRY art_quick_throw_no_such_method
     move $a1, rSELF                 # pass Thread::Current
     la   $t9, artThrowNoSuchMethodFromCode
     jr   $t9                        # artThrowNoSuchMethodFromCode(method_idx, Thread*, $sp)
-    move $a2, $sp                   # pass $sp
+    addiu $a2, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_throw_no_such_method
 
     /*
@@ -438,21 +466,15 @@ END art_quick_throw_no_such_method
 ENTRY \c_name
     GENERATE_GLOBAL_POINTER
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME  # save callee saves in case allocation triggers GC
-    lw    $a2, 64($sp)                    # pass caller Method*
-    move  $t0, $sp                        # save $sp
-    addiu $sp, $sp, -32                   # make space for extra args
-    .cfi_adjust_cfa_offset 32
-    move  $a3, rSELF                      # pass Thread::Current
-    .cfi_rel_offset 28, 12
+    lw    $a2, FRAME_SIZE_REFS_AND_ARGS_CALLEE_SAVE+ARG_SLOT_SIZE($sp)    # pass caller Method*
+    addiu $t0, $sp, ARG_SLOT_SIZE
+    sw    $t0, 16($sp)                    # pass $sp (remove arg slots)
     jal   \cxx_name                       # (method_idx, this, caller, Thread*, $sp)
-    sw    $t0, 16($sp)                    # pass $sp
-    addiu $sp, $sp, 32                    # release out args
-    .cfi_adjust_cfa_offset -32
+    move  $a3, rSELF                      # pass Thread::Current
     move  $a0, $v0                        # save target Method*
-    move  $t9, $v1                        # save $v0->code_
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
     beqz  $v0, 1f
-    nop
+    move  $t9, $v1                        # save $v0->code_
     jr    $t9
     nop
 1:
@@ -495,10 +517,10 @@ ENTRY art_quick_invoke_stub
     .cfi_def_cfa_register 30
     move  $s1, $a3              # move managed thread pointer into s1
     addiu $s0, $zero, SUSPEND_CHECK_INTERVAL  # reset s0 to suspend check interval
-    addiu $t0, $a2, 16          # create space for method pointer in frame
-    srl   $t0, $t0, 4           # shift the frame size right 4
-    sll   $t0, $t0, 4           # shift the frame size left 4 to align to 16 bytes
-    subu  $sp, $sp, $t0         # reserve stack space for argument array
+    addiu $t0, $a2, 4           # create space for method pointer in frame.
+    subu  $t0, $sp, $t0         # reserve & align *stack* to 16 bytes:
+    srl   $t0, $t0, 4           # native calling convention only aligns to 8B,
+    sll   $sp, $t0, 4           # so we have to ensure ART 16B alignment ourselves.
     addiu $a0, $sp, 4           # pass stack pointer + method ptr as dest for memcpy
     jal   memcpy                # (dest, src, bytes)
     addiu $sp, $sp, -16         # make space for argument slots for memcpy
@@ -547,7 +569,7 @@ ENTRY art_quick_handle_fill_data
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case exception allocation triggers GC
     move    $a2, rSELF                         # pass Thread::Current
     jal     artHandleFillArrayDataFromCode     # (Array*, const DexFile::Payload*, Thread*, $sp)
-    move    $a3, $sp                           # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE            # pass $sp (remove arg slots)
     RETURN_IF_ZERO
 END art_quick_handle_fill_data
 
@@ -562,7 +584,7 @@ ENTRY art_quick_lock_object
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME      # save callee saves in case we block
     move    $a1, rSELF                    # pass Thread::Current
     jal     artLockObjectFromCode         # (Object* obj, Thread*, $sp)
-    move    $a2, $sp                      # pass $sp
+    addiu   $a2, $sp, ARG_SLOT_SIZE       # pass $sp (remove arg slots)
     RETURN_IF_ZERO
 END art_quick_lock_object
 
@@ -577,7 +599,7 @@ ENTRY art_quick_unlock_object
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case exception allocation triggers GC
     move    $a1, rSELF                # pass Thread::Current
     jal     artUnlockObjectFromCode   # (Object* obj, Thread*, $sp)
-    move    $a2, $sp                  # pass $sp
+    addiu   $a2, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
     RETURN_IF_ZERO
 END art_quick_unlock_object
 
@@ -595,7 +617,8 @@ ENTRY art_quick_check_cast
     sw     $a1, 4($sp)
     sw     $a0, 0($sp)
     jal    artIsAssignableFromCode
-    nop
+    addiu  $sp, $sp, -16             # reserve argument slots on the stack
+    addiu  $sp, $sp, 16
     beqz   $v0, .Lthrow_class_cast_exception
     lw     $ra, 12($sp)
     jr     $ra
@@ -611,7 +634,7 @@ ENTRY art_quick_check_cast
     move $a2, rSELF                 # pass Thread::Current
     la   $t9, artThrowClassCastException
     jr   $t9                        # artThrowClassCastException (Class*, Class*, Thread*, SP)
-    move $a3, $sp                   # pass $sp
+    addiu $a3, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_check_cast
 
     /*
@@ -677,13 +700,14 @@ ENTRY art_quick_aput_obj
     move   $a1, $t1
     move   $a0, $t0
     jal    artIsAssignableFromCode  # (Class*, Class*)
-    nop
+    addiu $sp, $sp, -16     # reserve argument slots on the stack
+    addiu $sp, $sp, 16
     lw     $ra, 28($sp)
     lw     $t9, 12($sp)
     lw     $a2, 8($sp)
     lw     $a1, 4($sp)
     lw     $a0, 0($sp)
-    add    $sp, 32
+    addiu  $sp, $sp, 32
     .cfi_adjust_cfa_offset -32
     bnez   $v0, .Ldo_aput
     nop
@@ -692,7 +716,7 @@ ENTRY art_quick_aput_obj
     move $a2, rSELF                 # pass Thread::Current
     la   $t9, artThrowArrayStoreException
     jr   $t9                        # artThrowArrayStoreException(Class*, Class*, Thread*, SP)
-    move $a3, $sp                   # pass $sp
+    addiu $a3, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
 END art_quick_aput_obj
 
     /*
@@ -707,7 +731,7 @@ ENTRY art_quick_initialize_static_storage
     move    $a2, rSELF                          # pass Thread::Current
     # artInitializeStaticStorageFromCode(uint32_t type_idx, Method* referrer, Thread*, $sp)
     jal     artInitializeStaticStorageFromCode
-    move    $a3, $sp                            # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE             # pass $sp (remove arg slots)
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_static_storage
 
@@ -721,7 +745,7 @@ ENTRY art_quick_initialize_type
     move    $a2, rSELF                         # pass Thread::Current
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*, $sp)
     jal     artInitializeTypeFromCode
-    move    $a3, $sp                           # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE            # pass $sp (remove arg slots)
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_type
 
@@ -736,7 +760,7 @@ ENTRY art_quick_initialize_type_and_verify_access
     move    $a2, rSELF                         # pass Thread::Current
     # artInitializeTypeFromCode(uint32_t type_idx, Method* referrer, Thread*, $sp)
     jal     artInitializeTypeAndVerifyAccessFromCode
-    move    $a3, $sp                           # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE            # pass $sp (remove arg slots)
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_initialize_type_and_verify_access
 
@@ -746,11 +770,11 @@ END art_quick_initialize_type_and_verify_access
     .extern artGet32StaticFromCode
 ENTRY art_quick_get32_static
     GENERATE_GLOBAL_POINTER
+    lw     $a1, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a1, 64($sp)                  # pass referrer's Method*
     move   $a2, rSELF                    # pass Thread::Current
     jal    artGet32StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*, $sp)
-    move   $a3, $sp                      # pass $sp
+    addiu  $a3, $sp, ARG_SLOT_SIZE       # pass $sp (remove arg slots)
     RETURN_IF_NO_EXCEPTION
 END art_quick_get32_static
 
@@ -760,11 +784,11 @@ END art_quick_get32_static
     .extern artGet64StaticFromCode
 ENTRY art_quick_get64_static
     GENERATE_GLOBAL_POINTER
+    lw     $a1, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a1, 64($sp)                  # pass referrer's Method*
     move   $a2, rSELF                    # pass Thread::Current
     jal    artGet64StaticFromCode        # (uint32_t field_idx, const Method* referrer, Thread*, $sp)
-    move   $a3, $sp                      # pass $sp
+    addiu  $a3, $sp, ARG_SLOT_SIZE       # pass $sp (remove arg slots)
     RETURN_IF_NO_EXCEPTION
 END art_quick_get64_static
 
@@ -774,11 +798,11 @@ END art_quick_get64_static
     .extern artGetObjStaticFromCode
 ENTRY art_quick_get_obj_static
     GENERATE_GLOBAL_POINTER
+    lw     $a1, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a1, 64($sp)                  # pass referrer's Method*
     move   $a2, rSELF                    # pass Thread::Current
     jal    artGetObjStaticFromCode       # (uint32_t field_idx, const Method* referrer, Thread*, $sp)
-    move   $a3, $sp                      # pass $sp
+    addiu  $a3, $sp, ARG_SLOT_SIZE       # pass $sp (remove arg slots)
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_obj_static
 
@@ -788,11 +812,12 @@ END art_quick_get_obj_static
     .extern artGet32InstanceFromCode
 ENTRY art_quick_get32_instance
     GENERATE_GLOBAL_POINTER
+    lw     $a2, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a2, 64($sp)                  # pass referrer's Method*
-    move   $a3, rSELF                    # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 16($sp)                  # pass $sp (remove arg slots)
     jal    artGet32InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
+    move   $a3, rSELF                    # pass Thread::Current
     RETURN_IF_NO_EXCEPTION
 END art_quick_get32_instance
 
@@ -802,11 +827,12 @@ END art_quick_get32_instance
     .extern artGet64InstanceFromCode
 ENTRY art_quick_get64_instance
     GENERATE_GLOBAL_POINTER
+    lw     $a2, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a2, 64($sp)                  # pass referrer's Method*
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 16($sp)                  # pass $sp (remove arg slots)
+    jal    artGet32InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
     move   $a3, rSELF                    # pass Thread::Current
-    jal    artGet64InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
     RETURN_IF_NO_EXCEPTION
 END art_quick_get64_instance
 
@@ -816,11 +842,12 @@ END art_quick_get64_instance
     .extern artGetObjInstanceFromCode
 ENTRY art_quick_get_obj_instance
     GENERATE_GLOBAL_POINTER
+    lw     $a2, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a2, 64($sp)                  # pass referrer's Method*
-    move   $a3, rSELF                    # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 16($sp)                  # pass $sp (remove arg slots)
     jal    artGetObjInstanceFromCode     # (field_idx, Object*, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
+    move   $a3, rSELF                    # pass Thread::Current
     RETURN_IF_NO_EXCEPTION
 END art_quick_get_obj_instance
 
@@ -830,11 +857,12 @@ END art_quick_get_obj_instance
     .extern artSet32StaticFromCode
 ENTRY art_quick_set32_static
     GENERATE_GLOBAL_POINTER
+    lw     $a2, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a2, 64($sp)                  # pass referrer's Method*
-    move   $a3, rSELF                    # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 16($sp)                  # pass $sp (remove arg slots)
     jal    artSet32StaticFromCode        # (field_idx, new_val, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
+    move   $a3, rSELF                    # pass Thread::Current
     RETURN_IF_ZERO
 END art_quick_set32_static
 
@@ -844,11 +872,12 @@ END art_quick_set32_static
     .extern artSet32StaticFromCode
 ENTRY art_quick_set64_static
     GENERATE_GLOBAL_POINTER
+    lw     $a1, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a1, 64($sp)                  # pass referrer's Method*
-    sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 20($sp)                  # pass $sp (remove arg slots)
     jal    artSet64StaticFromCode        # (field_idx, referrer, new_val, Thread*, $sp)
-    sw     $sp, 20($sp)                  # pass $sp
+    sw     rSELF, 16($sp)                # pass Thread::Current
     RETURN_IF_ZERO
 END art_quick_set64_static
 
@@ -858,11 +887,12 @@ END art_quick_set64_static
     .extern artSetObjStaticFromCode
 ENTRY art_quick_set_obj_static
     GENERATE_GLOBAL_POINTER
+    lw     $a2, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a2, 64($sp)                  # pass referrer's Method*
-    move   $a3, rSELF                    # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 16($sp)                  # pass $sp (remove arg slots)
     jal    artSetObjStaticFromCode       # (field_idx, new_val, referrer, Thread*, $sp)
-    sw     $sp, 16($sp)                  # pass $sp
+    move   $a3, rSELF                    # pass Thread::Current
     RETURN_IF_ZERO
 END art_quick_set_obj_static
 
@@ -872,11 +902,12 @@ END art_quick_set_obj_static
     .extern artSet32InstanceFromCode
 ENTRY art_quick_set32_instance
     GENERATE_GLOBAL_POINTER
+    lw     $a3, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a3, 64($sp)                  # pass referrer's Method*
-    sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 20($sp)                  # pass $sp (remove arg slots)
     jal    artSet32InstanceFromCode      # (field_idx, Object*, new_val, referrer, Thread*, $sp)
-    sw     $sp, 20($sp)                  # pass $sp
+    sw     rSELF, 16($sp)                # pass Thread::Current
     RETURN_IF_ZERO
 END art_quick_set32_instance
 
@@ -887,9 +918,10 @@ END art_quick_set32_instance
 ENTRY art_quick_set64_instance
     GENERATE_GLOBAL_POINTER
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 20($sp)                  # pass $sp (remove arg slots)
     jal    artSet64InstanceFromCode      # (field_idx, Object*, new_val, Thread*, $sp)
-    sw     $sp, 20($sp)                  # pass $sp
+    sw     rSELF, 16($sp)                # pass Thread::Current
     RETURN_IF_ZERO
 END art_quick_set64_instance
 
@@ -899,11 +931,12 @@ END art_quick_set64_instance
     .extern artSetObjInstanceFromCode
 ENTRY art_quick_set_obj_instance
     GENERATE_GLOBAL_POINTER
+    lw     $a3, 0($sp)                   # pass referrer's Method*
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
-    lw     $a3, 64($sp)                  # pass referrer's Method*
-    sw     rSELF, 16($sp)                # pass Thread::Current
+    addiu  $t0, $sp, ARG_SLOT_SIZE
+    sw     $t0, 20($sp)                  # pass $sp (remove arg slots)
     jal    artSetObjInstanceFromCode     # (field_idx, Object*, new_val, referrer, Thread*, $sp)
-    sw     $sp, 20($sp)                  # pass $sp
+    sw     rSELF, 16($sp)                # pass Thread::Current
     RETURN_IF_ZERO
 END art_quick_set_obj_instance
 
@@ -920,7 +953,7 @@ ENTRY art_quick_resolve_string
     move    $a2, rSELF                # pass Thread::Current
     # artResolveStringFromCode(Method* referrer, uint32_t string_idx, Thread*, $sp)
     jal     artResolveStringFromCode
-    move    $a3, $sp                  # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
     RETURN_IF_RESULT_IS_NON_ZERO
 END art_quick_resolve_string
 
@@ -933,7 +966,7 @@ ENTRY \name
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
     move    $a2, rSELF                # pass Thread::Current
     jal     \entrypoint
-    move    $a3, $sp                  # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
     \return
 END \name
 .endm
@@ -943,9 +976,10 @@ END \name
 ENTRY \name
     GENERATE_GLOBAL_POINTER
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME  # save callee saves in case of GC
-    move    $a3, rSELF                # pass Thread::Current
+    addiu   $t0, $sp, ARG_SLOT_SIZE
+    sw      $t0, 16($sp)              # pass $sp (remove arg slots)
     jal     \entrypoint
-    sw      $sp, 16($sp)              # pass $sp
+    move    $a3, rSELF                # pass Thread::Current
     \return
 END \name
 .endm
@@ -968,7 +1002,7 @@ ENTRY art_quick_test_suspend
     move   $a0, rSELF
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME          # save callee saves for stack crawl
     jal    artTestSuspendFromCode             # (Thread*, $sp)
-    move   $a1, $sp
+    addiu  $a1, $sp, ARG_SLOT_SIZE            # pass $sp (remove arg slots)
     RESTORE_REF_ONLY_CALLEE_SAVE_FRAME_AND_RETURN
 END art_quick_test_suspend
 
@@ -979,13 +1013,12 @@ END art_quick_test_suspend
     .extern artQuickProxyInvokeHandler
 ENTRY art_quick_proxy_invoke_handler
     GENERATE_GLOBAL_POINTER
-    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    sw      $a0, 0($sp)            # place proxy method at bottom of frame
-    move    $a2, rSELF             # pass Thread::Current
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_A0
+    move    $a2, rSELF                  # pass Thread::Current
     jal     artQuickProxyInvokeHandler  # (Method* proxy method, receiver, Thread*, SP)
-    move    $a3, $sp               # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE     # pass $sp (remove arg slots)
     lw      $t0, THREAD_EXCEPTION_OFFSET(rSELF) # load Thread::Current()->exception_
-    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
     bnez    $t0, 1f
     mtc1    $v0, $f0               # place return value to FP return value
     jr      $ra
@@ -1013,11 +1046,11 @@ END art_quick_imt_conflict_trampoline
 ENTRY art_quick_resolution_trampoline
     GENERATE_GLOBAL_POINTER
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    move    $a2, rSELF             # pass Thread::Current
+    move    $a2, rSELF                    # pass Thread::Current
     jal     artQuickResolutionTrampoline  # (Method* called, receiver, Thread*, SP)
-    move    $a3, $sp               # pass $sp
+    addiu   $a3, $sp, ARG_SLOT_SIZE       # pass $sp (remove arg slots)
     beqz    $v0, 1f
-    lw      $a0, 0($sp)            # load resolved method to $a0
+    lw      $a0, ARG_SLOT_SIZE($sp)       # load resolved method to $a0
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
     move    $t9, $v0               # code pointer must be in $t9 to generate the global pointer
     jr      $v0                    # tail call to method
@@ -1027,17 +1060,76 @@ ENTRY art_quick_resolution_trampoline
     DELIVER_PENDING_EXCEPTION
 END art_quick_resolution_trampoline
 
-UNIMPLEMENTED art_quick_generic_jni_trampoline
+    .extern artQuickGenericJniTrampoline
+    .extern artQuickGenericJniEndTrampoline
+ENTRY art_quick_generic_jni_trampoline
+    SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_A0
+    move    $s8, $sp               # save $sp to $s8
+    move    $s3, $gp               # save $gp to $s3
+
+    # prepare for call to artQuickGenericJniTrampoline(Thread*, SP)
+    move    $a0, rSELF                     # pass Thread::Current
+    addiu   $a1, $sp, ARG_SLOT_SIZE        # save $sp (remove arg slots)
+    jal     artQuickGenericJniTrampoline   # (Thread*, SP)
+    addiu   $sp, $sp, -5120                # reserve space on the stack
+
+    # The C call will have registered the complete save-frame on success.
+    # The result of the call is:
+    # v0: ptr to native code, 0 on error.
+    # v1: ptr to the bottom of the used area of the alloca, can restore stack till here.
+    beq     $v0, $zero, 1f         # check entry error
+    move    $t9, $v0               # save the code ptr
+    move    $sp, $v1               # release part of the alloca
+
+    # Load parameters from stack into registers
+    lw      $a0,   0($sp)
+    lw      $a1,   4($sp)
+    lw      $a2,   8($sp)
+
+    # Load FPRs the same as GPRs. Look at BuildNativeCallFrameStateMachine.
+    jalr    $t9                    # native call
+    lw      $a3,  12($sp)
+    addiu   $sp, $sp, 16           # remove arg slots
+
+    move    $gp, $s3               # restore $gp from $s3
+
+    # result sign extension is handled in C code
+    # prepare for call to artQuickGenericJniEndTrampoline(Thread*, result, result_f)
+    move    $a0, rSELF             # pass Thread::Current
+    move    $a2, $v0               # pass result
+    move    $a3, $v1
+    addiu   $sp, $sp, -24          # reserve arg slots
+    jal     artQuickGenericJniEndTrampoline
+    s.d     $f0, 16($sp)           # pass result_f
+    addiu   $sp, $sp, 24           # remove arg slots
+
+    lw      $t0, THREAD_EXCEPTION_OFFSET(rSELF) # load Thread::Current()->exception_
+    bne     $t0, $zero, 2f         # check for pending exceptions
+    move    $sp, $s8               # tear down the alloca
+
+    # tear dpown the callee-save frame
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
+
+    mtc1    $v0, $f0               # place return value to FP return value
+    jr      $ra
+    mtc1    $v1, $f1               # place return value to FP return value
+
+1:
+    move    $sp, $s8               # tear down the alloca
+2:
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
+    DELIVER_PENDING_EXCEPTION
+END art_quick_generic_jni_trampoline
 
     .extern artQuickToInterpreterBridge
 ENTRY art_quick_to_interpreter_bridge
     GENERATE_GLOBAL_POINTER
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    move    $a1, rSELF             # pass Thread::Current
-    jal     artQuickToInterpreterBridge    # (Method* method, Thread*, SP)
-    move    $a2, $sp               # pass $sp
+    move    $a1, rSELF                          # pass Thread::Current
+    jal     artQuickToInterpreterBridge         # (Method* method, Thread*, SP)
+    addiu   $a2, $sp, ARG_SLOT_SIZE             # pass $sp (remove arg slots)
     lw      $t0, THREAD_EXCEPTION_OFFSET(rSELF) # load Thread::Current()->exception_
-    RESTORE_REF_ONLY_CALLEE_SAVE_FRAME
+    RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
     bnez    $t0, 1f
     mtc1    $v0, $f0               # place return value to FP return value
     jr      $ra
@@ -1054,18 +1146,13 @@ END art_quick_to_interpreter_bridge
 ENTRY art_quick_instrumentation_entry
     GENERATE_GLOBAL_POINTER
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME
-    move     $t0, $sp       # remember bottom of caller's frame
-    addiu    $sp, $sp, -32  # space for args, pad (3 words), arguments (5 words)
-    .cfi_adjust_cfa_offset 32
-    sw       $a0, 28($sp)   # save arg0
+    sw       $a0, 28($sp)   # save arg0 in free arg slot
     sw       $ra, 16($sp)   # pass $ra
-    move     $a3, $t0       # pass $sp
+    addiu    $a3, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
     jal      artInstrumentationMethodEntryFromCode  # (Method*, Object*, Thread*, SP, LR)
     move     $a2, rSELF     # pass Thread::Current
     move     $t9, $v0       # $t9 holds reference to code
     lw       $a0, 28($sp)   # restore arg0
-    addiu    $sp, $sp, 32   # remove args
-    .cfi_adjust_cfa_offset -32
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
     jalr     $t9            # call method
     nop
@@ -1077,32 +1164,33 @@ art_quick_instrumentation_exit:
     addiu    $t9, $ra, 4    # put current address into $t9 to rebuild $gp
     GENERATE_GLOBAL_POINTER
     move     $ra, $zero     # link register is to here, so clobber with 0 for later checks
+
+    addiu    $sp, $sp, -16  # allocate temp storage on the stack
+    .cfi_adjust_cfa_offset 16
+    sw       $v0, 12($sp)
+    .cfi_rel_offset 2, 12
+    sw       $v1, 8($sp)
+    .cfi_rel_offset 3, 8
+    s.s      $f0, 4($sp)
+    s.s      $f1, 0($sp)
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME
-    move     $t0, $sp       # remember bottom of caller's frame
-    addiu    $sp, $sp, -48  # save return values and set up args
-    .cfi_adjust_cfa_offset 48
-    sw       $v0, 32($sp)
-    .cfi_rel_offset 2, 32
-    sw       $v1, 36($sp)
-    .cfi_rel_offset 3, 36 
-    s.s      $f0, 40($sp)
-    s.s      $f1, 44($sp)
     s.s      $f0, 16($sp)   # pass fpr result
     s.s      $f1, 20($sp)
     move     $a2, $v0       # pass gpr result
     move     $a3, $v1
-    move     $a1, $t0       # pass $sp
+    addiu    $a1, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
     jal      artInstrumentationMethodExitFromCode  # (Thread*, SP, gpr_res, fpr_res)
     move     $a0, rSELF     # pass Thread::Current
     move     $t0, $v0       # set aside returned link register
     move     $ra, $v1       # set link register for deoptimization
-    lw       $v0, 32($sp)   # restore return values
-    lw       $v1, 36($sp)
-    l.s      $f0, 40($sp)
-    l.s      $f1, 44($sp)
+    addiu    $sp, $sp, ARG_SLOT_SIZE+FRAME_SIZE_REFS_ONLY_CALLEE_SAVE  # args slot + refs_only callee save frame
+    lw       $v0, 12($sp)   # restore return values
+    lw       $v1, 8($sp)
+    l.s      $f0, 4($sp)
+    l.s      $f1, 0($sp)
     jr       $t0            # return
-    addiu    $sp, $sp, 112  # 48 bytes of args + 64 bytes of callee save frame
-    .cfi_adjust_cfa_offset -112
+    addiu    $sp, $sp, 16   # remove temp storage from stack
+    .cfi_adjust_cfa_offset -16
 END art_quick_instrumentation_exit
 
     /*
@@ -1117,7 +1205,7 @@ ENTRY art_quick_deoptimize
     move     $a0, rSELF     # pass Thread::current
     jal      artDeoptimize  # artDeoptimize(Thread*, SP)
                             # Returns caller method's frame size.
-    move     $a1, $sp       # pass $sp
+    addiu    $a1, $sp, ARG_SLOT_SIZE  # pass $sp (remove arg slots)
 END art_quick_deoptimize
 
     /*
