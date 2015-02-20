@@ -15,6 +15,8 @@
  */
 
 #include "codegen_mips.h"
+
+#include "arch/mips/entrypoints_direct_mips.h"
 #include "dex/quick/mir_to_lir-inl.h"
 #include "dex/reg_storage_eq.h"
 #include "mips_lir.h"
@@ -691,6 +693,18 @@ LIR* MipsMir2Lir::OpCondBranch(ConditionCode cc, LIR* target) {
 }
 
 LIR* MipsMir2Lir::InvokeTrampoline(OpKind op, RegStorage r_tgt, QuickEntrypointEnum trampoline) {
+  if (IsDirectEntrypoint(trampoline)) {
+    // Reserve argument space on stack (for $a0-$a3) for
+    // entrypoints that directly reference native implementations.
+    // This is not safe in general, as it violates the frame size
+    // of the Quick method, but it is used here only for calling
+    // native functions, outside of the runtime.
+    OpRegImm(kOpSub, rs_rSP, 16);
+    LIR* retVal = OpReg(op, r_tgt);
+    OpRegImm(kOpAdd, rs_rSP, 16);
+    return retVal;
+  }
+
   return OpReg(op, r_tgt);
 }
 
