@@ -250,7 +250,13 @@ RegLocation MipsMir2Lir::GenDivRem(RegLocation rl_dest, RegStorage reg1, RegStor
 RegLocation MipsMir2Lir::GenDivRemLit(RegLocation rl_dest, RegStorage reg1, int lit,
                                        bool is_div) {
   RegStorage t_reg = AllocTemp();
-  NewLIR3(kMipsAddiu, t_reg.GetReg(), rZERO, lit);
+  // lit is guarantee to be a 16-bit constant
+  if (IsUint(16, lit)) {
+      NewLIR3(kMipsOri, t_reg.GetReg(), rZERO, lit);
+  } else {
+      // use Addiu to extend the sign bits.
+      NewLIR3(kMipsAddiu, t_reg.GetReg(), rZERO, lit);
+  }
   NewLIR2(kMipsDiv, reg1.GetReg(), t_reg.GetReg());
   RegLocation rl_result = EvalLoc(rl_dest, kCoreReg, true);
   if (is_div) {
