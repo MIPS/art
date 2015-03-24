@@ -113,6 +113,21 @@ void MipsMir2Lir::GenArithOpDouble(Instruction::Code opcode,
   StoreValueWide(rl_dest, rl_result);
 }
 
+void MipsMir2Lir::GenConversionCall(QuickEntrypointEnum trampoline, RegLocation rl_dest,
+                                    RegLocation rl_src, RegisterClass reg_class) {
+  FlushAllRegs();   // Send everything to home location.
+  CallRuntimeHelperRegLocation(trampoline, rl_src, false);
+  if (rl_dest.wide) {
+    RegLocation rl_result;
+    rl_result = GetReturnWide(reg_class);
+    StoreValueWide(rl_dest, rl_result);
+  } else {
+    RegLocation rl_result;
+    rl_result = GetReturn(reg_class);
+    StoreValue(rl_dest, rl_result);
+  }
+}
+
 void MipsMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest,
                                 RegLocation rl_src) {
   int op = kMipsNop;
@@ -131,22 +146,22 @@ void MipsMir2Lir::GenConversion(Instruction::Code opcode, RegLocation rl_dest,
       op = kMipsFcvtdw;
       break;
     case Instruction::FLOAT_TO_INT:
-      GenConversionCall(kQuickF2iz, rl_dest, rl_src);
+      GenConversionCall(kQuickF2iz, rl_dest, rl_src, kCoreReg);
       return;
     case Instruction::DOUBLE_TO_INT:
-      GenConversionCall(kQuickD2iz, rl_dest, rl_src);
+      GenConversionCall(kQuickD2iz, rl_dest, rl_src, kCoreReg);
       return;
     case Instruction::LONG_TO_DOUBLE:
-      GenConversionCall(kQuickL2d, rl_dest, rl_src);
+      GenConversionCall(kQuickL2d, rl_dest, rl_src, kFPReg);
       return;
     case Instruction::FLOAT_TO_LONG:
-      GenConversionCall(kQuickF2l, rl_dest, rl_src);
+      GenConversionCall(kQuickF2l, rl_dest, rl_src, kCoreReg);
       return;
     case Instruction::LONG_TO_FLOAT:
-      GenConversionCall(kQuickL2f, rl_dest, rl_src);
+      GenConversionCall(kQuickL2f, rl_dest, rl_src, kFPReg);
       return;
     case Instruction::DOUBLE_TO_LONG:
-      GenConversionCall(kQuickD2l, rl_dest, rl_src);
+      GenConversionCall(kQuickD2l, rl_dest, rl_src, kCoreReg);
       return;
     default:
       LOG(FATAL) << "Unexpected opcode: " << opcode;

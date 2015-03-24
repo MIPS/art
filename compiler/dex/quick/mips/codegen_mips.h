@@ -187,6 +187,8 @@ class MipsMir2Lir FINAL : public Mir2Lir {
                     RegLocation rl_src2);
     void GenSubLong(Instruction::Code opcode, RegLocation rl_dest, RegLocation rl_src1,
                     RegLocation rl_src2);
+    void GenConversionCall(QuickEntrypointEnum trampoline, RegLocation rl_dest, RegLocation rl_src,
+                    RegisterClass reg_class);
 
     void ConvertShortToLongBranch(LIR* lir);
     RegLocation GenDivRem(RegLocation rl_dest, RegLocation rl_src1,
