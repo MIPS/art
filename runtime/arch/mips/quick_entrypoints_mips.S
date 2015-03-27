@@ -1053,7 +1053,7 @@ ENTRY art_quick_resolution_trampoline
     lw      $a0, ARG_SLOT_SIZE($sp)       # load resolved method to $a0
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
     move    $t9, $v0               # code pointer must be in $t9 to generate the global pointer
-    jr      $v0                    # tail call to method
+    jr      $t9                    # tail call to method
     nop
 1:
     RESTORE_REF_AND_ARGS_CALLEE_SAVE_FRAME
@@ -1165,32 +1165,31 @@ art_quick_instrumentation_exit:
     GENERATE_GLOBAL_POINTER
     move     $ra, $zero     # link register is to here, so clobber with 0 for later checks
 
+    SETUP_REF_ONLY_CALLEE_SAVE_FRAME
     addiu    $sp, $sp, -16  # allocate temp storage on the stack
     .cfi_adjust_cfa_offset 16
-    sw       $v0, 12($sp)
-    .cfi_rel_offset 2, 12
-    sw       $v1, 8($sp)
-    .cfi_rel_offset 3, 8
-    s.s      $f0, 4($sp)
-    s.s      $f1, 0($sp)
-    SETUP_REF_ONLY_CALLEE_SAVE_FRAME
+    sw       $v0, ARG_SLOT_SIZE+12($sp)
+    .cfi_rel_offset 2, ARG_SLOT_SIZE+12
+    sw       $v1, ARG_SLOT_SIZE+8($sp)
+    .cfi_rel_offset 3, ARG_SLOT_SIZE+8
+    s.s      $f1, ARG_SLOT_SIZE+4($sp)
+    s.s      $f0, ARG_SLOT_SIZE($sp)
     s.s      $f0, 16($sp)   # pass fpr result
     s.s      $f1, 20($sp)
     move     $a2, $v0       # pass gpr result
     move     $a3, $v1
-    addiu    $a1, $sp, ARG_SLOT_SIZE   # pass $sp (remove arg slots)
+    addiu    $a1, $sp, ARG_SLOT_SIZE+16   # pass $sp (remove arg slots and temp storage)
     jal      artInstrumentationMethodExitFromCode  # (Thread*, SP, gpr_res, fpr_res)
     move     $a0, rSELF     # pass Thread::Current
-    move     $t0, $v0       # set aside returned link register
+    move     $t9, $v0       # set aside returned link register
     move     $ra, $v1       # set link register for deoptimization
-    addiu    $sp, $sp, ARG_SLOT_SIZE+FRAME_SIZE_REFS_ONLY_CALLEE_SAVE  # args slot + refs_only callee save frame
-    lw       $v0, 12($sp)   # restore return values
-    lw       $v1, 8($sp)
-    l.s      $f0, 4($sp)
-    l.s      $f1, 0($sp)
-    jr       $t0            # return
-    addiu    $sp, $sp, 16   # remove temp storage from stack
-    .cfi_adjust_cfa_offset -16
+    lw       $v0, ARG_SLOT_SIZE+12($sp)   # restore return values
+    lw       $v1, ARG_SLOT_SIZE+8($sp)
+    l.s      $f1, ARG_SLOT_SIZE+4($sp)
+    l.s      $f0, ARG_SLOT_SIZE($sp)
+    jr       $t9            # return
+    addiu    $sp, $sp, ARG_SLOT_SIZE+FRAME_SIZE_REFS_ONLY_CALLEE_SAVE+16  # restore stack
+    .cfi_adjust_cfa_offset -(ARG_SLOT_SIZE+FRAME_SIZE_REFS_ONLY_CALLEE_SAVE+16)
 END art_quick_instrumentation_exit
 
     /*
