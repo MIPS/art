@@ -1063,6 +1063,7 @@ END art_quick_resolution_trampoline
     .extern artQuickGenericJniTrampoline
     .extern artQuickGenericJniEndTrampoline
 ENTRY art_quick_generic_jni_trampoline
+    GENERATE_GLOBAL_POINTER
     SETUP_REF_AND_ARGS_CALLEE_SAVE_FRAME_WITH_METHOD_IN_A0
     move    $s8, $sp               # save $sp to $s8
     move    $s3, $gp               # save $gp to $s3
