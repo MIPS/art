@@ -831,7 +831,7 @@ ENTRY art_quick_get64_instance
     SETUP_REF_ONLY_CALLEE_SAVE_FRAME     # save callee saves in case of GC
     addiu  $t0, $sp, ARG_SLOT_SIZE
     sw     $t0, 16($sp)                  # pass $sp (remove arg slots)
-    jal    artGet32InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
+    jal    artGet64InstanceFromCode      # (field_idx, Object*, referrer, Thread*, $sp)
     move   $a3, rSELF                    # pass Thread::Current
     RETURN_IF_NO_EXCEPTION
 END art_quick_get64_instance
