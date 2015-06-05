@@ -268,6 +268,9 @@ MemMap* MemMap::MapAnonymous(const char* name, byte* expected_ptr, size_t byte_c
       return nullptr;
     }
     flags = MAP_PRIVATE;
+    if (expected_ptr) {
+        flags |= MAP_FIXED;
+    }
   }
 #endif
 
