@@ -3004,7 +3004,7 @@ class HTypeConversion : public HExpression<1> {
   Primitive::Type GetInputType() const { return GetInput()->GetType(); }
   Primitive::Type GetResultType() const { return GetType(); }
 
-  // Required by the x86 and ARM code generators when producing calls
+  // Required by the x86, ARM, MIPS, MIPS64 code generators when producing calls
   // to the runtime.
   uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
 
@@ -3146,9 +3146,11 @@ class HInstanceFieldGet : public HExpression<1> {
   HInstanceFieldGet(HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
-                    bool is_volatile)
+                    bool is_volatile,
+                    uint32_t dex_pc)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, value);
   }
 
@@ -3172,10 +3174,14 @@ class HInstanceFieldGet : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(InstanceFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldGet);
 };
@@ -3186,9 +3192,11 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
                     HInstruction* value,
                     Primitive::Type field_type,
                     MemberOffset field_offset,
-                    bool is_volatile)
+                    bool is_volatile,
+                    uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, object);
     SetRawInputAt(1, value);
   }
@@ -3203,10 +3211,14 @@ class HInstanceFieldSet : public HTemplateInstruction<2> {
   bool IsVolatile() const { return field_info_.IsVolatile(); }
   HInstruction* GetValue() const { return InputAt(1); }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(InstanceFieldSet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HInstanceFieldSet);
 };
@@ -3564,9 +3576,11 @@ class HStaticFieldGet : public HExpression<1> {
   HStaticFieldGet(HInstruction* cls,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile,
+                  uint32_t dex_pc)
       : HExpression(field_type, SideEffects::DependsOnSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, cls);
   }
 
@@ -3587,10 +3601,14 @@ class HStaticFieldGet : public HExpression<1> {
   Primitive::Type GetFieldType() const { return field_info_.GetFieldType(); }
   bool IsVolatile() const { return field_info_.IsVolatile(); }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(StaticFieldGet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldGet);
 };
@@ -3601,9 +3619,11 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
                   HInstruction* value,
                   Primitive::Type field_type,
                   MemberOffset field_offset,
-                  bool is_volatile)
+                  bool is_volatile,
+                  uint32_t dex_pc)
       : HTemplateInstruction(SideEffects::ChangesSomething()),
-        field_info_(field_offset, field_type, is_volatile) {
+        field_info_(field_offset, field_type, is_volatile),
+        dex_pc_(dex_pc) {
     SetRawInputAt(0, cls);
     SetRawInputAt(1, value);
   }
@@ -3615,10 +3635,14 @@ class HStaticFieldSet : public HTemplateInstruction<2> {
 
   HInstruction* GetValue() const { return InputAt(1); }
 
+  // Required by the mips code generators when producing calls to the runtime.
+  uint32_t GetDexPc() const OVERRIDE { return dex_pc_; }
+
   DECLARE_INSTRUCTION(StaticFieldSet);
 
  private:
   const FieldInfo field_info_;
+  const uint32_t dex_pc_;
 
   DISALLOW_COPY_AND_ASSIGN(HStaticFieldSet);
 };

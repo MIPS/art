@@ -103,6 +103,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/code_generator.cc \
 	optimizing/code_generator_arm.cc \
 	optimizing/code_generator_arm64.cc \
+	optimizing/code_generator_mips.cc \
 	optimizing/code_generator_mips64.cc \
 	optimizing/code_generator_x86.cc \
 	optimizing/code_generator_x86_64.cc \
@@ -177,7 +178,8 @@ LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES := \
   driver/compiler_options.h \
   image_writer.h \
   optimizing/locations.h \
-  utils/arm/constants_arm.h
+  utils/arm/constants_arm.h \
+  utils/mips/assembler_mips.h
 
 # $(1): target or host
 # $(2): ndebug or debug

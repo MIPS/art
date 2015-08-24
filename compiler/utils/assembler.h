@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "arch/instruction_set.h"
+#include "arch/instruction_set_features.h"
 #include "base/logging.h"
 #include "base/macros.h"
 #include "arm/constants_arm.h"
@@ -78,6 +79,13 @@ class ExternalLabel {
 class Label {
  public:
   Label() : position_(0) {}
+
+  Label(Label&& src)
+      : position_(src.position_) {
+    // We must unlink/unbind the src label when moving; if not, calling the destructor on
+    // the src label would fail.
+    src.position_ = 0;
+  }
 
   ~Label() {
     // Assert if label is being destroyed with unresolved branches pending.
@@ -197,6 +205,20 @@ class AssemblerBuffer {
   template<typename T> void Store(size_t position, T value) {
     CHECK_LE(position, Size() - static_cast<int>(sizeof(T)));
     *reinterpret_cast<T*>(contents_ + position) = value;
+  }
+
+  void Resize(size_t new_size) {
+    if (new_size > Capacity()) {
+      ExtendCapacity(new_size);
+    }
+    cursor_ = contents_ + new_size;
+  }
+
+  void Move(size_t newposition, size_t oldposition, size_t size) {
+    // Move a chunk of the buffer from oldposition to newposition.
+    DCHECK_LE(oldposition + size, Size());
+    DCHECK_LE(newposition + size, Size());
+    memmove(contents_ + newposition, contents_ + oldposition, size);
   }
 
   void Move(size_t newposition, size_t oldposition) {
@@ -350,7 +372,7 @@ class AssemblerBuffer {
     return data + capacity - kMinimumGap;
   }
 
-  void ExtendCapacity();
+  void ExtendCapacity(size_t min_capacity = 0u);
 
   friend class AssemblerFixup;
 };
@@ -368,13 +390,16 @@ class DebugFrameOpCodeWriterForAssembler FINAL
         assembler_(buffer) {
   }
 
+  std::vector<uint8_t>& GetOpcodes() { return opcodes_; }
+
  private:
   Assembler* assembler_;
 };
 
 class Assembler {
  public:
-  static Assembler* Create(InstructionSet instruction_set);
+  static Assembler* Create(InstructionSet instruction_set,
+                           const InstructionSetFeatures* instruction_set_features = nullptr);
 
   // Emit slow paths queued during assembly
   virtual void EmitSlowPaths() { buffer_.EmitSlowPaths(this); }
@@ -531,6 +556,9 @@ class Assembler {
    * @details It is used by debuggers and other tools to unwind the call stack.
    */
   DebugFrameOpCodeWriterForAssembler& cfi() { return cfi_; }
+
+  // CFI helper.
+  virtual void DebugFrameImplicitlyAdvancePC();
 
  protected:
   Assembler() : buffer_(), cfi_(this) {}
