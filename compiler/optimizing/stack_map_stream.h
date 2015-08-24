@@ -116,6 +116,21 @@ class StackMapStream : public ValueObject {
 
   void AddInlineInfoEntry(uint32_t method_index);
 
+  size_t GetNumberOfStackMaps() const {
+    return stack_maps_.Size();
+  }
+
+  const StackMapEntry& GetStackMap(size_t i) const {
+    DCHECK_LT(i, stack_maps_.Size());
+    return stack_maps_.GetRawStorage()[i];
+  }
+
+  void SetStackMapNativePcOffset(size_t i, uint32_t native_pc_offset) {
+    DCHECK_LT(i, stack_maps_.Size());
+    stack_maps_.GetRawStorage()[i].native_pc_offset = native_pc_offset;
+    native_pc_offset_max_ = std::max(native_pc_offset_max_, native_pc_offset);
+  }
+
   // Prepares the stream to fill in a memory region. Must be called before FillIn.
   // Returns the size (in bytes) needed to store this stream.
   size_t PrepareForFillIn();

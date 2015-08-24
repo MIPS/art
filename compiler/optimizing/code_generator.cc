@@ -20,6 +20,7 @@
 #include "code_generator_arm64.h"
 #include "code_generator_x86.h"
 #include "code_generator_x86_64.h"
+#include "code_generator_mips.h"
 #include "code_generator_mips64.h"
 #include "compiled_method.h"
 #include "dex/verified_method.h"
@@ -458,8 +459,11 @@ CodeGenerator* CodeGenerator::Create(HGraph* graph,
           *isa_features.AsArm64InstructionSetFeatures(),
           compiler_options);
     }
-    case kMips:
-      return nullptr;
+    case kMips: {
+      return new mips::CodeGeneratorMIPS(graph,
+          *isa_features.AsMipsInstructionSetFeatures(),
+          compiler_options);
+    }
     case kMips64: {
       return new mips64::CodeGeneratorMIPS64(graph,
           *isa_features.AsMips64InstructionSetFeatures(),
