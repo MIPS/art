@@ -37,36 +37,50 @@
      * Reserves FRAME_SIZE_SAVE_ALL_CALLEE_SAVE + ARG_SLOT_SIZE bytes on the stack
      */
 .macro SETUP_SAVE_ALL_CALLEE_SAVE_FRAME
-    addiu  $sp, $sp, -48
-    .cfi_adjust_cfa_offset 48
+    addiu  $sp, $sp, -96
+    .cfi_adjust_cfa_offset 96
 
      // Ugly compile-time check, but we only have the preprocessor.
-#if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 48)
+#if (FRAME_SIZE_SAVE_ALL_CALLEE_SAVE != 96)
 #error "SAVE_ALL_CALLEE_SAVE_FRAME(MIPS) size not as expected."
 #endif
 
-    sw     $ra, 44($sp)
-    .cfi_rel_offset 31, 44
-    sw     $s8, 40($sp)
-    .cfi_rel_offset 30, 40
-    sw     $gp, 36($sp)
-    .cfi_rel_offset 28, 36
-    sw     $s7, 32($sp)
-    .cfi_rel_offset 23, 32
-    sw     $s6, 28($sp)
-    .cfi_rel_offset 22, 28
-    sw     $s5, 24($sp)
-    .cfi_rel_offset 21, 24
-    sw     $s4, 20($sp)
-    .cfi_rel_offset 20, 20
-    sw     $s3, 16($sp)
-    .cfi_rel_offset 19, 16
-    sw     $s2, 12($sp)
-    .cfi_rel_offset 18, 12
-    sw     $s1, 8($sp)
-    .cfi_rel_offset 17, 8
-    sw     $s0, 4($sp)
-    .cfi_rel_offset 16, 4
+    sw     $ra, 92($sp)
+    .cfi_rel_offset 31, 92
+    sw     $s8, 88($sp)
+    .cfi_rel_offset 30, 88
+    sw     $gp, 84($sp)
+    .cfi_rel_offset 28, 84
+    sw     $s7, 80($sp)
+    .cfi_rel_offset 23, 80
+    sw     $s6, 76($sp)
+    .cfi_rel_offset 22, 76
+    sw     $s5, 72($sp)
+    .cfi_rel_offset 21, 72
+    sw     $s4, 68($sp)
+    .cfi_rel_offset 20, 68
+    sw     $s3, 64($sp)
+    .cfi_rel_offset 19, 64
+    sw     $s2, 60($sp)
+    .cfi_rel_offset 18, 60
+    sw     $s1, 56($sp)
+    .cfi_rel_offset 17, 56
+    sw     $s0, 52($sp)
+    .cfi_rel_offset 16, 52
+
+    s.s    $f30, 44($sp)
+    s.s    $f31, 48($sp)
+    s.s    $f28, 36($sp)
+    s.s    $f29, 40($sp)
+    s.s    $f26, 28($sp)
+    s.s    $f27, 32($sp)
+    s.s    $f24, 20($sp)
+    s.s    $f25, 24($sp)
+    s.s    $f22, 12($sp)
+    s.s    $f23, 16($sp)
+    s.s    $f20, 4($sp)
+    s.s    $f21, 8($sp)
+
     # 1 word for holding Method*
     addiu  $sp, $sp, -ARG_SLOT_SIZE               # reserve argument slots on the stack
     .cfi_adjust_cfa_offset ARG_SLOT_SIZE
