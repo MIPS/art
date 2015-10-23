@@ -179,7 +179,8 @@ LIBART_COMPILER_ENUM_OPERATOR_OUT_HEADER_FILES := \
   image_writer.h \
   optimizing/locations.h \
   utils/arm/constants_arm.h \
-  utils/mips/assembler_mips.h
+  utils/mips/assembler_mips.h \
+  utils/mips64/assembler_mips64.h
 
 # $(1): target or host
 # $(2): ndebug or debug
