@@ -1910,13 +1910,33 @@ void MipsAssembler::RemoveFrame(size_t frame_size,
 void MipsAssembler::IncreaseFrameSize(size_t adjust) {
   CHECK_ALIGNED(adjust, kFramePointerSize);
   Addiu32(SP, SP, -adjust);
-  cfi_.AdjustCFAOffset(adjust);
+  // Workaround: on R2 don't emit CFI records for composite long branches, which push and pop RA to
+  // and from the stack because of using the NAL instruction, which clobbers RA (see EmitBranch()).
+  // Without proper adjustment these CFI records would have incorrect PC (beyond the size of
+  // generated code) and the location in the stream of CFI records. However, these long composite
+  // branches always first push and then pop RA, leaving SP unchanged from the POV of the code that
+  // precedes or follows such a branch. IOW, if we simply omit these records, SP-relative
+  // information will only be incorrect for the code of the composite branch itself, where SP is
+  // temporarily lowered, and there should be no negative effect of this outside the branch code.
+  // Given the low likelyhoods of the following three events, which must all occur for the issue to
+  // surface,
+  //   1. generating long branches (reaching out by more than +/-128KB)
+  //   2. pre-empting execution in the middle of a long branch
+  //   3. examining or unwinding the stack while PC points inside the long branch
+  // it should be OK for now to just suppress CFI records for these branches. The proper fix is at
+  // https://android-review.googlesource.com/#/c/177882/.
+  if (!overwriting_) {
+    cfi_.AdjustCFAOffset(adjust);
+  }
 }
 
 void MipsAssembler::DecreaseFrameSize(size_t adjust) {
   CHECK_ALIGNED(adjust, kFramePointerSize);
   Addiu32(SP, SP, adjust);
-  cfi_.AdjustCFAOffset(-adjust);
+  // Workaround: see the comment in IncreaseFrameSize().
+  if (!overwriting_) {
+    cfi_.AdjustCFAOffset(-adjust);
+  }
 }
 
 void MipsAssembler::Store(FrameOffset dest, ManagedRegister msrc, size_t size) {
