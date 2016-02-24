@@ -1476,7 +1476,8 @@ TEST_F(StubTest, AllocObjectArray) {
 TEST_F(StubTest, StringCompareTo) {
   TEST_DISABLED_FOR_HEAP_REFERENCE_POISONING();
 
-#if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || (defined(__x86_64__) && !defined(__APPLE__))
+#if defined(__i386__) || defined(__arm__) || defined(__aarch64__) || \
+    (defined(__mips__) && !defined(__LP64__)) || (defined(__x86_64__) && !defined(__APPLE__))
   // TODO: Check the "Unresolved" allocation stubs
 
   Thread* self = Thread::Current();
@@ -2341,7 +2342,7 @@ TEST_F(StubTest, IMT) {
 }
 
 TEST_F(StubTest, StringIndexOf) {
-#if defined(__arm__) || defined(__aarch64__)
+#if defined(__arm__) || defined(__aarch64__) || (defined(__mips__) && !defined(__LP64__))
   TEST_DISABLED_FOR_HEAP_REFERENCE_POISONING();
 
   Thread* self = Thread::Current();

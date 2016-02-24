@@ -118,6 +118,7 @@ LIBART_COMPILER_SRC_FILES := \
 	optimizing/intrinsics.cc \
 	optimizing/intrinsics_arm.cc \
 	optimizing/intrinsics_arm64.cc \
+	optimizing/intrinsics_mips.cc \
 	optimizing/intrinsics_x86.cc \
 	optimizing/intrinsics_x86_64.cc \
 	optimizing/licm.cc \
