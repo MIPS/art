@@ -27,12 +27,24 @@
 #include "utils/mips/assembler_mips.h"
 #include "utils/mips/constants_mips.h"
 
+#define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
+void IntrinsicLocationsBuilderMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) { \
+}                                                                                      \
+void IntrinsicCodeGeneratorMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
+}
+
 namespace art {
 
 namespace mips {
 
 IntrinsicLocationsBuilderMIPS::IntrinsicLocationsBuilderMIPS(CodeGeneratorMIPS* codegen)
   : arena_(codegen->GetGraph()->GetArena()) {
+}
+
+bool IntrinsicLocationsBuilderMIPS::TryDispatch(HInvoke* invoke) {
+  Dispatch(invoke);
+  LocationSummary* res = invoke->GetLocations();
+  return res != nullptr && res->Intrinsified();
 }
 
 MipsAssembler* IntrinsicCodeGeneratorMIPS::GetAssembler() {
@@ -54,6 +66,8 @@ inline bool IntrinsicCodeGeneratorMIPS::IsR6() const {
 inline bool IntrinsicCodeGeneratorMIPS::Is32BitFPU() const {
   return codegen_->GetInstructionSetFeatures().Is32BitFloatingPoint();
 }
+
+#ifndef ART_DISABLE_INTRINSICS_MIPS32
 
 #define __ codegen->GetAssembler()->
 
@@ -138,12 +152,6 @@ class IntrinsicSlowPathMIPS : public SlowPathCodeMIPS {
 };
 
 #undef __
-
-bool IntrinsicLocationsBuilderMIPS::TryDispatch(HInvoke* invoke) {
-  Dispatch(invoke);
-  LocationSummary* res = invoke->GetLocations();
-  return res != nullptr && res->Intrinsified();
-}
 
 #define __ assembler->
 
@@ -1887,13 +1895,9 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromString(HInvoke* invoke)
   __ Bind(slow_path->GetExitLabel());
 }
 
-// Unimplemented intrinsics.
+#undef __
 
-#define UNIMPLEMENTED_INTRINSIC(Name)                                                  \
-void IntrinsicLocationsBuilderMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) { \
-}                                                                                      \
-void IntrinsicCodeGeneratorMIPS::Visit ## Name(HInvoke* invoke ATTRIBUTE_UNUSED) {    \
-}
+// Unimplemented intrinsics.
 
 UNIMPLEMENTED_INTRINSIC(MathCeil)
 UNIMPLEMENTED_INTRINSIC(MathFloor)
@@ -1906,9 +1910,17 @@ UNIMPLEMENTED_INTRINSIC(ReferenceGetReferent)
 UNIMPLEMENTED_INTRINSIC(StringGetCharsNoCheck)
 UNIMPLEMENTED_INTRINSIC(SystemArrayCopyChar)
 
-#undef UNIMPLEMENTED_INTRINSIC
+#else  // else of #ifndef ART_DISABLE_INTRINSICS_MIPS32
 
-#undef __
+#define OPTIMIZING_INTRINSICS(Name, IsStatic) UNIMPLEMENTED_INTRINSIC(Name)
+#include "intrinsics_list.h"
+INTRINSICS_LIST(OPTIMIZING_INTRINSICS)
+#undef INTRINSICS_LIST
+#undef OPTIMIZING_INTRINSICS
+
+#endif  // end of #ifndef ART_DISABLE_INTRINSICS_MIPS32
+
+#undef UNIMPLEMENTED_INTRINSIC
 
 }  // namespace mips
 }  // namespace art
