@@ -1949,7 +1949,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringCompareTo(HInvoke* invoke) {
                     QUICK_ENTRYPOINT_OFFSET(kMipsWordSize,
                                             pStringCompareTo).Int32Value());
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
   __ Bind(slow_path->GetExitLabel());
 }
 
@@ -2107,7 +2107,7 @@ static void GenerateStringIndexOf(HInvoke* invoke,
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pIndexOf).Int32Value());
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
 
   if (slow_path != nullptr) {
     __ Bind(slow_path->GetExitLabel());
@@ -2193,7 +2193,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromBytes(HInvoke* invoke) 
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pAllocStringFromBytes).Int32Value());
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
@@ -2226,7 +2226,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromChars(HInvoke* invoke) 
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pAllocStringFromChars).Int32Value());
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
 }
 
@@ -2255,7 +2255,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromString(HInvoke* invoke)
                     TR,
                     QUICK_ENTRYPOINT_OFFSET(kMipsWordSize, pAllocStringFromString).Int32Value());
   __ Jalr(T9);
-  __ Nop();
+  __ NopIfNoReordering();
   codegen_->RecordPcInfo(invoke, invoke->GetDexPc());
   __ Bind(slow_path->GetExitLabel());
 }
