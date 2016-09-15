@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "code_generator_mips.h"
 #include "dex_cache_array_fixups_mips.h"
 
 #include "base/arena_containers.h"
@@ -27,8 +28,9 @@ namespace mips {
  */
 class DexCacheArrayFixupsVisitor : public HGraphVisitor {
  public:
-  explicit DexCacheArrayFixupsVisitor(HGraph* graph)
+  explicit DexCacheArrayFixupsVisitor(HGraph* graph, CodeGenerator* codegen)
       : HGraphVisitor(graph),
+        codegen_(down_cast<CodeGeneratorMIPS*>(codegen)),
         dex_cache_array_bases_(std::less<const DexFile*>(),
                                // Attribute memory use to code generator.
                                graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {}
@@ -40,6 +42,12 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
       // while avoiding recalculation of the base in a loop.
       HMipsDexCacheArraysBase* base = entry.second;
       base->MoveBeforeFirstUserAndOutOfLoops();
+    }
+    // Computing the dex cache base for PC-relative accesses will clobber RA with
+    // the NAL instruction on R2. Take a note of this before generating the method
+    // entry.
+    if (!dex_cache_array_bases_.empty() && !codegen_->GetInstructionSetFeatures().IsR6()) {
+      codegen_->ClobberRA();
     }
   }
 
@@ -74,6 +82,8 @@ class DexCacheArrayFixupsVisitor : public HGraphVisitor {
         });
   }
 
+  CodeGeneratorMIPS* codegen_;
+
   using DexCacheArraysBaseMap =
       ArenaSafeMap<const DexFile*, HMipsDexCacheArraysBase*, std::less<const DexFile*>>;
   DexCacheArraysBaseMap dex_cache_array_bases_;
@@ -85,7 +95,7 @@ void DexCacheArrayFixups::Run() {
     // that can be live-in at the irreducible loop header.
     return;
   }
-  DexCacheArrayFixupsVisitor visitor(graph_);
+  DexCacheArrayFixupsVisitor visitor(graph_, codegen_);
   visitor.VisitInsertionOrder();
   visitor.MoveBasesIfNeeded();
 }
