@@ -37,6 +37,10 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
       // entry block) and relieve some pressure on the register allocator
       // while avoiding recalculation of the base in a loop.
       base_->MoveBeforeFirstUserAndOutOfLoops();
+      // Computing the base for PC-relative literals will clobber RA with
+      // the NAL instruction on R2. Take a note of this before generating
+      // the method entry.
+      codegen_->ClobberRA();
     }
   }
 

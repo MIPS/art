@@ -481,7 +481,8 @@ CodeGeneratorMIPS::CodeGeneratorMIPS(HGraph* graph,
                       graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
       call_patches_(MethodReferenceComparator(),
                     graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
-      pc_relative_dex_cache_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)) {
+      pc_relative_dex_cache_patches_(graph->GetArena()->Adapter(kArenaAllocCodeGenerator)),
+      clobbered_ra_(false) {
   // Save RA (containing the return address) to mimic Quick.
   AddAllocatedRegister(Location::RegisterLocation(RA));
 }
@@ -684,6 +685,17 @@ void CodeGeneratorMIPS::ComputeSpillMask() {
   }
 }
 
+bool CodeGeneratorMIPS::HasAllocatedCalleeSaveRegisters() const {
+  // If RA is clobbered by PC-relative operations on R2 and it's the only spilled register
+  // (this can happen in leaf methods), force CodeGenerator::InitializeCodeGeneration()
+  // into the path that creates a stack frame so that RA can be explicitly saved and restored.
+  // RA can't otherwise be saved/restored when it's the only spilled register.
+  // TODO: Can this be improved? It causes creation of a stack frame (while RA might be
+  // saved in an unused temporary register) and saving of RA and the current method pointer
+  // in the frame.
+  return CodeGenerator::HasAllocatedCalleeSaveRegisters() || clobbered_ra_;
+}
+
 static dwarf::Reg DWARFReg(Register reg) {
   return dwarf::Reg::MipsCore(static_cast<int>(reg));
 }
@@ -704,6 +716,9 @@ void CodeGeneratorMIPS::GenerateFrameEntry() {
   }
 
   if (HasEmptyFrame()) {
+    CHECK_EQ(fpu_spill_mask_, 0u);
+    CHECK_EQ(core_spill_mask_, 1u << RA);
+    CHECK(!clobbered_ra_);
     return;
   }
 
@@ -737,6 +752,7 @@ void CodeGeneratorMIPS::GenerateFrameEntry() {
   }
 
   // Store the current method pointer.
+  // TODO: can we not do this if RequiresCurrentMethod() returns false?
   __ StoreToOffset(kStoreWord, kMethodRegisterArgument, SP, kCurrentMethodStackOffset);
 }
 
