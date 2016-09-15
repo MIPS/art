@@ -263,6 +263,7 @@ class CodeGeneratorMIPS : public CodeGenerator {
   virtual ~CodeGeneratorMIPS() {}
 
   void ComputeSpillMask() OVERRIDE;
+  bool HasAllocatedCalleeSaveRegisters() const OVERRIDE;
   void GenerateFrameEntry() OVERRIDE;
   void GenerateFrameExit() OVERRIDE;
 
@@ -298,6 +299,9 @@ class CodeGeneratorMIPS : public CodeGenerator {
   size_t RestoreCoreRegister(size_t stack_index, uint32_t reg_id);
   size_t SaveFloatingPointRegister(size_t stack_index, uint32_t reg_id);
   size_t RestoreFloatingPointRegister(size_t stack_index, uint32_t reg_id);
+  void ClobberRA() {
+    clobbered_ra_ = true;
+  }
 
   void DumpCoreRegister(std::ostream& stream, int reg) const OVERRIDE;
   void DumpFloatingPointRegister(std::ostream& stream, int reg) const OVERRIDE;
@@ -417,6 +421,10 @@ class CodeGeneratorMIPS : public CodeGenerator {
   MethodToLiteralMap call_patches_;
   // PC-relative patch info for each HMipsDexCacheArraysBase.
   ArenaDeque<PcRelativePatchInfo> pc_relative_dex_cache_patches_;
+
+  // PC-relative loads on R2 clobber RA, which may need to be preserved explicitly in leaf methods.
+  // This is a flag set by pc_relative_fixups_mips and dex_cache_array_fixups_mips optimizations.
+  bool clobbered_ra_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeGeneratorMIPS);
 };
