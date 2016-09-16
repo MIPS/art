@@ -22,6 +22,7 @@
 #include "driver/compiler_options.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
+#include "utils/string_reference.h"
 #include "utils/mips/assembler_mips.h"
 
 namespace art {
@@ -226,6 +227,15 @@ class InstructionCodeGeneratorMIPS : public InstructionCodeGenerator {
   void HandleShift(HBinaryOperation* operation);
   void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info, uint32_t dex_pc);
   void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info, uint32_t dex_pc);
+  // Generate a GC root reference load:
+  //
+  //   root <- *(obj + offset)
+  //
+  // while honoring read barriers (if any).
+  void GenerateGcRootFieldLoad(HInstruction* instruction,
+                               Location root,
+                               Register obj,
+                               uint32_t offset);
   void GenerateIntCompare(IfCondition cond, LocationSummary* locations);
   void GenerateIntCompareAndBranch(IfCondition cond,
                                    LocationSummary* locations,
@@ -382,7 +392,7 @@ class CodeGeneratorMIPS : public CodeGenerator {
     PcRelativePatchInfo(PcRelativePatchInfo&& other) = default;
 
     const DexFile& target_dex_file;
-    // Either the dex cache array element offset or the string index.
+    // Either the dex cache array element offset or the string/type index.
     uint32_t offset_or_index;
     // Label for the instruction loading the most significant half of the offset that's added to PC
     // to form the base address (the least significant half is loaded with the instruction that
@@ -392,14 +402,22 @@ class CodeGeneratorMIPS : public CodeGenerator {
     MipsLabel pc_rel_label;
   };
 
+  PcRelativePatchInfo* NewPcRelativeStringPatch(const DexFile& dex_file, uint32_t string_index);
   PcRelativePatchInfo* NewPcRelativeDexCacheArrayPatch(const DexFile& dex_file,
                                                        uint32_t element_offset);
+  Literal* DeduplicateBootImageStringLiteral(const DexFile& dex_file, uint32_t string_index);
+  Literal* DeduplicateBootImageAddressLiteral(uint32_t address);
 
  private:
   Register GetInvokeStaticOrDirectExtraParameter(HInvokeStaticOrDirect* invoke, Register temp);
 
+  using Uint32ToLiteralMap = ArenaSafeMap<uint32_t, Literal*>;
   using MethodToLiteralMap = ArenaSafeMap<MethodReference, Literal*, MethodReferenceComparator>;
+  using BootStringToLiteralMap = ArenaSafeMap<StringReference,
+                                              Literal*,
+                                              StringReferenceValueComparator>;
 
+  Literal* DeduplicateUint32Literal(uint32_t value, Uint32ToLiteralMap* map);
   Literal* DeduplicateMethodLiteral(MethodReference target_method, MethodToLiteralMap* map);
   Literal* DeduplicateMethodAddressLiteral(MethodReference target_method);
   Literal* DeduplicateMethodCodeLiteral(MethodReference target_method);
@@ -416,11 +434,19 @@ class CodeGeneratorMIPS : public CodeGenerator {
   MipsAssembler assembler_;
   const MipsInstructionSetFeatures& isa_features_;
 
+  // Deduplication map for 32-bit literals, used for non-patchable boot image addresses.
+  Uint32ToLiteralMap uint32_literals_;
   // Method patch info, map MethodReference to a literal for method address and method code.
   MethodToLiteralMap method_patches_;
   MethodToLiteralMap call_patches_;
   // PC-relative patch info for each HMipsDexCacheArraysBase.
   ArenaDeque<PcRelativePatchInfo> pc_relative_dex_cache_patches_;
+  // Deduplication map for boot string literals for kBootImageLinkTimeAddress.
+  BootStringToLiteralMap boot_image_string_patches_;
+  // PC-relative String patch info.
+  ArenaDeque<PcRelativePatchInfo> pc_relative_string_patches_;
+  // Deduplication map for patchable boot image addresses.
+  Uint32ToLiteralMap boot_image_address_patches_;
 
   // PC-relative loads on R2 clobber RA, which may need to be preserved explicitly in leaf methods.
   // This is a flag set by pc_relative_fixups_mips and dex_cache_array_fixups_mips optimizations.
