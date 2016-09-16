@@ -5633,9 +5633,12 @@ inline uint32_t HLoadString::GetDexCacheElementOffset() const {
 
 // Note: defined outside class to see operator<<(., HLoadString::LoadKind).
 inline void HLoadString::AddSpecialInput(HInstruction* special_input) {
-  // The special input is used for PC-relative loads on some architectures.
+  // The special input is used for PC-relative loads on some architectures,
+  // including literal pool loads, which are PC-relative too.
   DCHECK(GetLoadKind() == LoadKind::kBootImageLinkTimePcRelative ||
-         GetLoadKind() == LoadKind::kDexCachePcRelative) << GetLoadKind();
+         GetLoadKind() == LoadKind::kDexCachePcRelative ||
+         GetLoadKind() == LoadKind::kBootImageLinkTimeAddress ||
+         GetLoadKind() == LoadKind::kBootImageAddress) << GetLoadKind();
   DCHECK(InputAt(0) == nullptr);
   SetRawInputAt(0u, special_input);
   special_input->AddUseAt(this, 0);

@@ -62,6 +62,21 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
     DCHECK(base_ != nullptr);
   }
 
+  void VisitLoadString(HLoadString* load_string) OVERRIDE {
+    HLoadString::LoadKind load_kind = load_string->GetLoadKind();
+    switch (load_kind) {
+      case HLoadString::LoadKind::kBootImageLinkTimeAddress:
+      case HLoadString::LoadKind::kBootImageAddress:
+      case HLoadString::LoadKind::kBootImageLinkTimePcRelative:
+        // Add a base register for PC-relative literals on R2.
+        InitializePCRelativeBasePointer();
+        load_string->AddSpecialInput(base_);
+        break;
+      default:
+        break;
+    }
+  }
+
   void HandleInvoke(HInvoke* invoke) {
     // If this is an invoke-static/-direct with PC-relative dex cache array
     // addressing, we need the PC-relative address base.
@@ -81,7 +96,7 @@ class PCRelativeHandlerVisitor : public HGraphVisitor {
       // method pointer from the invoke.
       if (invoke_static_or_direct->HasCurrentMethodInput()) {
         DCHECK(!invoke_static_or_direct->HasPcRelativeDexCache());
-        CHECK(!has_extra_input);  // TODO: review this.
+        CHECK(!has_extra_input);
         return;
       }
 
@@ -120,7 +135,6 @@ void PcRelativeFixups::Run() {
   CodeGeneratorMIPS* mips_codegen = down_cast<CodeGeneratorMIPS*>(codegen_);
   if (mips_codegen->GetInstructionSetFeatures().IsR6()) {
     // Do nothing for R6 because it has PC-relative addressing.
-    // TODO: review. Move this check into RunArchOptimizations()?
     return;
   }
   if (graph_->HasIrreducibleLoops()) {
