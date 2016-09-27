@@ -1978,8 +1978,12 @@ ENTRY_NO_GP art_quick_indexof
   blez  $t0, 6f         # if this.length()-fromIndex <= 0
   li    $v0, -1         #     return -1;
 
+#if defined(_MIPS_ARCH_MIPS32R6) || defined(_MIPS_ARCH_MIPS64R6)
+  lsa   $a0, $a2, $a0, 1  # $a0 += $a2 << 1
+#else
   sll   $v0, $a2, 1     # $a0 += $a2 * 2
   addu  $a0, $a0, $v0   #  "  "   "  " "
+#endif
   move  $v0, $a2        # Set i to fromIndex.
 
 1:

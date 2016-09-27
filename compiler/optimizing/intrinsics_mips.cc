@@ -2547,6 +2547,80 @@ void IntrinsicCodeGeneratorMIPS::VisitMathRoundFloat(HInvoke* invoke) {
   __ Bind(&done);
 }
 
+// void java.lang.String.getChars(int srcBegin, int srcEnd, char[] dst, int dstBegin)
+void IntrinsicLocationsBuilderMIPS::VisitStringGetCharsNoCheck(HInvoke* invoke) {
+  LocationSummary* locations = new (arena_) LocationSummary(invoke,
+                                                            LocationSummary::kNoCall,
+                                                            kIntrinsified);
+  locations->SetInAt(0, Location::RequiresRegister());
+  locations->SetInAt(1, Location::RequiresRegister());
+  locations->SetInAt(2, Location::RequiresRegister());
+  locations->SetInAt(3, Location::RequiresRegister());
+  locations->SetInAt(4, Location::RequiresRegister());
+
+  locations->AddTemp(Location::RequiresRegister());
+  locations->AddTemp(Location::RequiresRegister());
+}
+
+void IntrinsicCodeGeneratorMIPS::VisitStringGetCharsNoCheck(HInvoke* invoke) {
+  MipsAssembler* assembler = GetAssembler();
+  LocationSummary* locations = invoke->GetLocations();
+
+  // Check assumption that sizeof(Char) is 2 (used in scaling below).
+  const size_t char_size = Primitive::ComponentSize(Primitive::kPrimChar);
+  DCHECK_EQ(char_size, 2u);
+  const size_t char_shift = Primitive::ComponentSizeShift(Primitive::kPrimChar);
+
+  Register srcObj = locations->InAt(0).AsRegister<Register>();
+  Register srcBegin = locations->InAt(1).AsRegister<Register>();
+  Register srcEnd = locations->InAt(2).AsRegister<Register>();
+  Register dstObj = locations->InAt(3).AsRegister<Register>();
+  Register dstBegin = locations->InAt(4).AsRegister<Register>();
+
+  Register dstPtr = locations->GetTemp(0).AsRegister<Register>();
+  Register srcPtr = locations->GetTemp(1).AsRegister<Register>();
+  Register srcEndPtr = TMP;
+
+  MipsLabel done;
+  MipsLabel loop;
+
+  // Location of data in char array buffer.
+  const uint32_t data_offset = mirror::Array::DataOffset(char_size).Uint32Value();
+
+  // Get offset of value field within a string object.
+  const int32_t value_offset = mirror::String::ValueOffset().Int32Value();
+
+  __ Beq(srcBegin, srcEnd, &done);             // return.
+
+  // Calculate destination address.
+  if (IsR6()) {
+    __ Lsa(dstPtr, dstBegin, dstObj, char_shift);
+  } else {
+    __ Sll(AT, dstBegin, char_shift);
+    __ Addu(dstPtr, dstObj, AT);
+  }
+
+  // Calculate source begin/end addresses.
+  if (IsR6()) {
+    __ Lsa(srcEndPtr, srcEnd, srcObj, char_shift);
+    __ Lsa(srcPtr, srcBegin, srcObj, char_shift);
+  } else {
+    __ Sll(AT, srcEnd, char_shift);
+    __ Addu(srcEndPtr, srcObj, AT);
+    __ Sll(AT, srcBegin, char_shift);
+    __ Addu(srcPtr, srcObj, AT);
+  }
+
+  __ Bind(&loop);
+  __ Lh(AT, srcPtr, value_offset);
+  __ Sh(AT, dstPtr, data_offset);
+  __ Addiu(srcPtr, srcPtr, char_size);
+  __ Addiu(dstPtr, dstPtr, char_size);
+  __ Bne(srcPtr, srcEndPtr, &loop);
+
+  __ Bind(&done);
+}
+
 // Unimplemented intrinsics.
 
 UNIMPLEMENTED_INTRINSIC(MIPS, MathCeil)
@@ -2556,7 +2630,6 @@ UNIMPLEMENTED_INTRINSIC(MIPS, MathRoundDouble)
 UNIMPLEMENTED_INTRINSIC(MIPS, UnsafeCASLong)
 
 UNIMPLEMENTED_INTRINSIC(MIPS, ReferenceGetReferent)
-UNIMPLEMENTED_INTRINSIC(MIPS, StringGetCharsNoCheck)
 UNIMPLEMENTED_INTRINSIC(MIPS, SystemArrayCopyChar)
 UNIMPLEMENTED_INTRINSIC(MIPS, SystemArrayCopy)
 
