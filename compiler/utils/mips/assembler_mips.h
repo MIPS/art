@@ -225,6 +225,7 @@ class MipsAssembler FINAL : public Assembler {
   void Srav(Register rd, Register rt, Register rs);
   void Ext(Register rd, Register rt, int pos, int size);  // R2+
   void Ins(Register rd, Register rt, int pos, int size);  // R2+
+  void Lsa(Register rd, Register rs, Register rt, int saPlusOne);  // R6
 
   void Lb(Register rt, Register rs, uint16_t imm16);
   void Lh(Register rt, Register rs, uint16_t imm16);
