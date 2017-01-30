@@ -3764,7 +3764,6 @@ artMterpAsmInstructionStart = .L_op_nop
     GOTO_OPCODE v0                      # jump to next instruction
 
 
-
 /* ------------------------------ */
     .balign 128
 .L_op_float_to_double: /* 0x89 */
