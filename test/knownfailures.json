@@ -615,4 +615,11 @@
                           "no-prebuild configs."],
         "variant": "no-prebuild"
     }
+    {
+        "tests": "640-checker-integer-valueof",
+        "description": [
+            "The java.lang.Integer.valueOf intrinsic is not supported in PIC mode."
+        ],
+        "variant": "optimizing & pictest | speed-profile & pictest"
+    }
 ]
