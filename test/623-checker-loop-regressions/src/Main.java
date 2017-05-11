@@ -281,6 +281,8 @@ public class Main {
   }
 
   // If vectorized, string encoding should be dealt with.
+  /// CHECK-START-MIPS64: void Main.string2Bytes(char[], java.lang.String) loop_optimization (after)
+  /// CHECK-NOT: VecLoad
   private static void string2Bytes(char[] a, String b) {
     int min = Math.min(a.length, b.length());
     for (int i = 0; i < min; i++) {
@@ -317,6 +319,13 @@ public class Main {
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<One>>] loop:<<Loop>>      outer_loop:none
   //
   /// CHECK-START-ARM64: void Main.oneBoth(short[], char[]) loop_optimization (after)
+  /// CHECK-DAG: <<One:i\d+>>  IntConstant 1                        loop:none
+  /// CHECK-DAG: <<Repl:d\d+>> VecReplicateScalar [<<One>>]         loop:none
+  /// CHECK-DAG: <<Phi:i\d+>>  Phi                                  loop:<<Loop:B\d+>> outer_loop:none
+  /// CHECK-DAG:               VecStore [{{l\d+}},<<Phi>>,<<Repl>>] loop:<<Loop>>      outer_loop:none
+  /// CHECK-DAG:               VecStore [{{l\d+}},<<Phi>>,<<Repl>>] loop:<<Loop>>      outer_loop:none
+  //
+  /// CHECK-START-MIPS64: void Main.oneBoth(short[], char[]) loop_optimization (after)
   /// CHECK-DAG: <<One:i\d+>>  IntConstant 1                        loop:none
   /// CHECK-DAG: <<Repl:d\d+>> VecReplicateScalar [<<One>>]         loop:none
   /// CHECK-DAG: <<Phi:i\d+>>  Phi                                  loop:<<Loop:B\d+>> outer_loop:none

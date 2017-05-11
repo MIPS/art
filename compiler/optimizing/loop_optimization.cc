@@ -755,10 +755,9 @@ bool HLoopOptimization::VectorizeUse(LoopNode* node,
     }
     return true;
   } else if (instruction->IsArrayGet()) {
-    // Strings are different, with a different offset to the actual data
-    // and some compressed to save memory. For now, all cases are rejected
-    // to avoid the complexity.
-    if (instruction->AsArrayGet()->IsStringCharAt()) {
+    // Deal with vector restrictions.
+    if (instruction->AsArrayGet()->IsStringCharAt() &&
+        HasVectorRestrictions(restrictions, kNoStringCharAt)) {
       return false;
     }
     // Accept a right-hand-side array base[index] for
@@ -969,8 +968,35 @@ bool HLoopOptimization::TrySetVectorType(Primitive::Type type, uint64_t* restric
       }
       return false;
     case kMips:
-    case kMips64:
       // TODO: implement MIPS SIMD.
+      return false;
+    case kMips64:
+      if (features->AsMips64InstructionSetFeatures()->HasMsa()) {
+        switch (type) {
+          case Primitive::kPrimBoolean:
+          case Primitive::kPrimByte:
+            *restrictions |= kNoDiv | kNoMinMax;
+            return TrySetVectorLength(16);
+          case Primitive::kPrimChar:
+          case Primitive::kPrimShort:
+            *restrictions |= kNoDiv | kNoMinMax | kNoStringCharAt;
+            return TrySetVectorLength(8);
+          case Primitive::kPrimInt:
+            *restrictions |= kNoDiv | kNoMinMax;
+            return TrySetVectorLength(4);
+          case Primitive::kPrimLong:
+            *restrictions |= kNoDiv | kNoMinMax;
+            return TrySetVectorLength(2);
+          case Primitive::kPrimFloat:
+            *restrictions |= kNoMinMax;
+            return TrySetVectorLength(4);
+          case Primitive::kPrimDouble:
+            *restrictions |= kNoMinMax;
+            return TrySetVectorLength(2);
+          default:
+            break;
+        }  // switch type
+      }
       return false;
     default:
       return false;
