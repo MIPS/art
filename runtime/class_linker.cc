@@ -8531,7 +8531,7 @@ void ClassLinker::SetEntryPointsToInterpreter(ArtMethod* method) const {
   if (!method->IsNative()) {
     method->SetEntryPointFromQuickCompiledCode(GetQuickToInterpreterBridge());
   } else {
-    SetEntryPointsToCompiledCode(method, GetQuickGenericJniStub());
+    method->SetEntryPointFromQuickCompiledCode(GetQuickGenericJniStub());
   }
 }
 
