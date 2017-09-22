@@ -614,7 +614,7 @@
         "description": [ "Tests require speed compilation which is no longer the default for",
                           "no-prebuild configs."],
         "variant": "no-prebuild"
-    }
+    },
     {
         "tests": "640-checker-integer-valueof",
         "description": [
