@@ -6168,8 +6168,11 @@ void InstructionCodeGeneratorMIPS::HandleFieldGet(HInstruction* instruction,
     InvokeRuntimeCallingConvention calling_convention;
     __ Addiu32(locations->GetTemp(0).AsRegister<Register>(), obj, offset);
     // Do implicit Null check
-    __ Lw(ZERO, locations->GetTemp(0).AsRegister<Register>(), 0);
-    codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
+    __ LoadFromOffset(kLoadWord,
+                      ZERO,
+                      locations->GetTemp(0).AsRegister<Register>(),
+                      0,
+                      null_checker);
     codegen_->InvokeRuntime(kQuickA64Load, instruction, dex_pc);
     CheckEntrypointTypes<kQuickA64Load, int64_t, volatile const int64_t*>();
     if (type == Primitive::kPrimDouble) {
@@ -6321,8 +6324,11 @@ void InstructionCodeGeneratorMIPS::HandleFieldSet(HInstruction* instruction,
     InvokeRuntimeCallingConvention calling_convention;
     __ Addiu32(locations->GetTemp(0).AsRegister<Register>(), obj, offset);
     // Do implicit Null check.
-    __ Lw(ZERO, locations->GetTemp(0).AsRegister<Register>(), 0);
-    codegen_->RecordPcInfo(instruction, instruction->GetDexPc());
+    __ LoadFromOffset(kLoadWord,
+                      ZERO,
+                      locations->GetTemp(0).AsRegister<Register>(),
+                      0,
+                      null_checker);
     if (type == Primitive::kPrimDouble) {
       // Pass FP parameters in core registers.
       if (value_location.IsFpuRegister()) {
