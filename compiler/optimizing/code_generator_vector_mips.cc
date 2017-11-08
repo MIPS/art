@@ -66,8 +66,12 @@ void InstructionCodeGeneratorMIPS::VisitVecReplicateScalar(HVecReplicateScalar* 
       break;
     case Primitive::kPrimLong:
       DCHECK_EQ(2u, instruction->GetVectorLength());
-      __ Mtc1(locations->InAt(0).AsRegisterPairLow<Register>(), FTMP);
-      __ MoveToFpuHigh(locations->InAt(0).AsRegisterPairHigh<Register>(), FTMP);
+      __ InsertW(static_cast<VectorRegister>(FTMP),
+                 locations->InAt(0).AsRegisterPairLow<Register>(),
+                 0);
+      __ InsertW(static_cast<VectorRegister>(FTMP),
+                 locations->InAt(0).AsRegisterPairHigh<Register>(),
+                 1);
       __ ReplicateFPToVectorRegister(dst, FTMP, /* is_double */ true);
       break;
     case Primitive::kPrimFloat:
