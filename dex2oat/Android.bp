@@ -139,14 +139,7 @@ art_cc_binary {
             "-Wno-frame-larger-than=",
             "-DART_PGO_INSTRUMENTATION",
         ],
-    },
-    target: {
-        android: {
-            lto: {
-                 thin: true,
-            },
-        },
-    },
+    }
 }
 
 art_cc_binary {
