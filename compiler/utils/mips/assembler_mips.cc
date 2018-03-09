@@ -2893,6 +2893,16 @@ void MipsAssembler::PcntD(VectorRegister wd, VectorRegister ws) {
   DsFsmInstr(EmitMsa2R(0xc1, 0x3, ws, wd, 0x1e)).FprOuts(wd).FprIns(ws);
 }
 
+void MipsAssembler::FclassW(VectorRegister wd, VectorRegister ws) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa2RF(0x190, 0x0, ws, wd, 0x1e)).FprOuts(wd).FprIns(ws);
+}
+
+void MipsAssembler::FclassD(VectorRegister wd, VectorRegister ws) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa2RF(0x190, 0x1, ws, wd, 0x1e)).FprOuts(wd).FprIns(ws);
+}
+
 void MipsAssembler::ReplicateFPToVectorRegister(VectorRegister dst,
                                                 FRegister src,
                                                 bool is_double) {

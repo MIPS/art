@@ -2137,6 +2137,14 @@ TEST_F(AssemblerMIPS32r6Test, Ftint_sD) {
   DriverStr(RepeatVV(&mips::MipsAssembler::Ftint_sD, "ftint_s.d ${reg1}, ${reg2}"), "ftint_s.d");
 }
 
+TEST_F(AssemblerMIPS32r6Test, FclassW) {
+  DriverStr(RepeatVV(&mips::MipsAssembler::FclassW, "fclass.w ${reg1}, ${reg2}"), "fclass.w");
+}
+
+TEST_F(AssemblerMIPS32r6Test, FclassD) {
+  DriverStr(RepeatVV(&mips::MipsAssembler::FclassD, "fclass.d ${reg1}, ${reg2}"), "fclass.d");
+}
+
 TEST_F(AssemblerMIPS32r6Test, SllB) {
   DriverStr(RepeatVVV(&mips::MipsAssembler::SllB, "sll.b ${reg1}, ${reg2}, ${reg3}"), "sll.b");
 }

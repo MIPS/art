@@ -1809,6 +1809,7 @@ void IntrinsicCodeGeneratorMIPS::VisitStringNewStringFromString(HInvoke* invoke)
 static void GenIsInfinite(LocationSummary* locations,
                           const DataType::Type type,
                           const bool isR6,
+                          const bool hasMsa,
                           MipsAssembler* assembler) {
   FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
   Register out = locations->Out().AsRegister<Register>();
@@ -1817,9 +1818,18 @@ static void GenIsInfinite(LocationSummary* locations,
 
   if (isR6) {
     if (type == DataType::Type::kFloat64) {
-        __ ClassD(FTMP, in);
+      __ ClassD(FTMP, in);
     } else {
-        __ ClassS(FTMP, in);
+      __ ClassS(FTMP, in);
+    }
+    __ Mfc1(out, FTMP);
+    __ Andi(out, out, kPositiveInfinity | kNegativeInfinity);
+    __ Sltu(out, ZERO, out);
+  } else if (hasMsa) {
+    if (type == DataType::Type::kFloat64) {
+      __ FclassD(static_cast<VectorRegister>(FTMP), static_cast<VectorRegister>(in));
+    } else {
+      __ FclassW(static_cast<VectorRegister>(FTMP), static_cast<VectorRegister>(in));
     }
     __ Mfc1(out, FTMP);
     __ Andi(out, out, kPositiveInfinity | kNegativeInfinity);
@@ -1852,7 +1862,7 @@ void IntrinsicLocationsBuilderMIPS::VisitFloatIsInfinite(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitFloatIsInfinite(HInvoke* invoke) {
-  GenIsInfinite(invoke->GetLocations(), DataType::Type::kFloat32, IsR6(), GetAssembler());
+  GenIsInfinite(invoke->GetLocations(), DataType::Type::kFloat32, IsR6(), HasMsa(), GetAssembler());
 }
 
 // boolean java.lang.Double.isInfinite(double)
@@ -1861,7 +1871,7 @@ void IntrinsicLocationsBuilderMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorMIPS::VisitDoubleIsInfinite(HInvoke* invoke) {
-  GenIsInfinite(invoke->GetLocations(), DataType::Type::kFloat64, IsR6(), GetAssembler());
+  GenIsInfinite(invoke->GetLocations(), DataType::Type::kFloat64, IsR6(), HasMsa(), GetAssembler());
 }
 
 static void GenHighestOneBit(LocationSummary* locations,
