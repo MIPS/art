@@ -854,6 +854,7 @@ END art_quick_deliver_exception
 ENTRY_NO_GP art_quick_throw_null_pointer_exception
     // Note that setting up $gp does not rely on $t9 here, so branching here directly is OK,
     // even after clobbering any registers we don't need to preserve, such as $gp or $t0.
+.Lart_quick_throw_null_pointer_exception:
     SETUP_SAVE_EVERYTHING_FRAME
     dla  $t9, artThrowNullPointerExceptionFromCode
     jalr $zero, $t9                 # artThrowNullPointerExceptionFromCode(Thread*)
@@ -1247,7 +1248,7 @@ END art_quick_handle_fill_data
      */
     .extern artLockObjectFromCode
 ENTRY_NO_GP art_quick_lock_object
-    beqzc   $a0, art_quick_throw_null_pointer_exception
+    beqzc   $a0, .Lart_quick_throw_null_pointer_exception
     li      $t8, LOCK_WORD_THIN_LOCK_COUNT_ONE
     li      $t3, LOCK_WORD_GC_STATE_MASK_SHIFTED_TOGGLED
 .Lretry_lock:
@@ -1287,7 +1288,7 @@ ENTRY_NO_GP art_quick_lock_object
 END art_quick_lock_object
 
 ENTRY_NO_GP art_quick_lock_object_no_inline
-    beq     $a0, $zero, art_quick_throw_null_pointer_exception
+    beq     $a0, $zero, .Lart_quick_throw_null_pointer_exception
     nop
     .cpsetup $t9, $t8, art_quick_lock_object_no_inline
     SETUP_SAVE_REFS_ONLY_FRAME            # save callee saves in case we block
@@ -1301,7 +1302,7 @@ END art_quick_lock_object_no_inline
      */
     .extern artUnlockObjectFromCode
 ENTRY_NO_GP art_quick_unlock_object
-    beqzc   $a0, art_quick_throw_null_pointer_exception
+    beqzc   $a0, .Lart_quick_throw_null_pointer_exception
     li      $t8, LOCK_WORD_THIN_LOCK_COUNT_ONE
     li      $t3, LOCK_WORD_GC_STATE_MASK_SHIFTED_TOGGLED
 .Lretry_unlock:
@@ -1351,7 +1352,7 @@ ENTRY_NO_GP art_quick_unlock_object
 END art_quick_unlock_object
 
 ENTRY_NO_GP art_quick_unlock_object_no_inline
-    beq     $a0, $zero, art_quick_throw_null_pointer_exception
+    beq     $a0, $zero, .Lart_quick_throw_null_pointer_exception
     nop
     .cpsetup $t9, $t8, art_quick_unlock_object_no_inline
     SETUP_SAVE_REFS_ONLY_FRAME         # save callee saves in case exception allocation triggers GC
@@ -2768,7 +2769,7 @@ art_quick_read_barrier_mark_introspection_gc_roots:
 art_quick_read_barrier_mark_introspection_end_of_entries:
 
 .Lintrospection_throw_npe:
-    b       art_quick_throw_null_pointer_exception
+    b       .Lart_quick_throw_null_pointer_exception
     daddiu  $ra, $ra, 4         # Skip lwu, make $ra point to lwu's stack map.
 
     .set push
