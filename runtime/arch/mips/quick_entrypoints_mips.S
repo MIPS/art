@@ -1489,7 +1489,9 @@ END art_quick_check_instance_of
     .cfi_rel_offset 9, 20
     sw     $t0, 16($sp)
     .cfi_rel_offset 8, 16
-    sw     $a2, 8($sp)              # padding slot at offset 12 (padding can be any slot in the 32B)
+    sw     $gp, 12($sp)
+    .cfi_rel_offset 28, 12
+    sw     $a2, 8($sp)
     .cfi_rel_offset 6, 8
     sw     $a1, 4($sp)
     .cfi_rel_offset 5, 4
@@ -1517,6 +1519,8 @@ END art_quick_check_instance_of
     .cfi_restore 5
     lw     $a2, 8($sp)
     .cfi_restore 6
+    lw     $gp, 12($sp)
+    .cfi_restore 28
     POP_REG_NE $t0, 8, 16, \rDest
     POP_REG_NE $t1, 9, 20, \rDest
     lw     $t9, 24($sp)
