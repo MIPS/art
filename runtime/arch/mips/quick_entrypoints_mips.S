@@ -790,6 +790,7 @@ END art_quick_deliver_exception
 ENTRY_NO_GP art_quick_throw_null_pointer_exception
     // Note that setting up $gp does not rely on $t9 here, so branching here directly is OK,
     // even after clobbering any registers we don't need to preserve, such as $gp or $t0.
+.Lart_quick_throw_null_pointer_exception:
     SETUP_SAVE_EVERYTHING_FRAME
     la   $t9, artThrowNullPointerExceptionFromCode
     jalr $zero, $t9                 # artThrowNullPointerExceptionFromCode(Thread*)
@@ -1298,7 +1299,7 @@ END art_quick_handle_fill_data
      */
     .extern artLockObjectFromCode
 ENTRY art_quick_lock_object
-    beqz    $a0, art_quick_throw_null_pointer_exception
+    beqz    $a0, .Lart_quick_throw_null_pointer_exception
     li      $t8, LOCK_WORD_THIN_LOCK_COUNT_ONE
     li      $t3, LOCK_WORD_GC_STATE_MASK_SHIFTED_TOGGLED
 .Lretry_lock:
@@ -1340,7 +1341,7 @@ ENTRY art_quick_lock_object
 END art_quick_lock_object
 
 ENTRY art_quick_lock_object_no_inline
-    beqz    $a0, art_quick_throw_null_pointer_exception
+    beqz    $a0, .Lart_quick_throw_null_pointer_exception
     nop
     SETUP_SAVE_REFS_ONLY_FRAME            # save callee saves in case we block
     la      $t9, artLockObjectFromCode
@@ -1354,7 +1355,7 @@ END art_quick_lock_object_no_inline
      */
     .extern artUnlockObjectFromCode
 ENTRY art_quick_unlock_object
-    beqz    $a0, art_quick_throw_null_pointer_exception
+    beqz    $a0, .Lart_quick_throw_null_pointer_exception
     li      $t8, LOCK_WORD_THIN_LOCK_COUNT_ONE
     li      $t3, LOCK_WORD_GC_STATE_MASK_SHIFTED_TOGGLED
 .Lretry_unlock:
@@ -1408,7 +1409,7 @@ ENTRY art_quick_unlock_object
 END art_quick_unlock_object
 
 ENTRY art_quick_unlock_object_no_inline
-    beqz    $a0, art_quick_throw_null_pointer_exception
+    beqz    $a0, .Lart_quick_throw_null_pointer_exception
     nop
     SETUP_SAVE_REFS_ONLY_FRAME        # save callee saves in case exception allocation triggers GC
     la      $t9, artUnlockObjectFromCode
@@ -2378,7 +2379,7 @@ ENTRY_NO_GP art_quick_instrumentation_exit
 .Ldo_deliver_instrumentation_exception:
     DELIVER_PENDING_EXCEPTION_FRAME_READY
 .Ldeoptimize:
-    b       art_quick_deoptimize
+    b       .Lart_quick_deoptimize
     sw      $v1, (ARG_SLOT_SIZE+FRAME_SIZE_SAVE_EVERYTHING-4)($sp)
                             # Fake a call from instrumentation return pc.
 END art_quick_instrumentation_exit
@@ -2388,6 +2389,7 @@ END art_quick_instrumentation_exit
      * will long jump to the upcall with a special exception of -1.
      */
     .extern artDeoptimize
+.Lart_quick_deoptimize:
 ENTRY_NO_GP_CUSTOM_CFA art_quick_deoptimize, ARG_SLOT_SIZE+FRAME_SIZE_SAVE_EVERYTHING
     # SETUP_SAVE_EVERYTHING_FRAME has been done by art_quick_instrumentation_exit.
     .cfi_rel_offset 31, ARG_SLOT_SIZE+252
@@ -3035,7 +3037,7 @@ art_quick_read_barrier_mark_introspection_end_of_entries:
     nop                         # Fill the delay slot of the last BRB_GC_ROOT_ENTRY.
 
 .Lintrospection_throw_npe:
-    b       art_quick_throw_null_pointer_exception
+    b       .Lart_quick_throw_null_pointer_exception
     addiu   $ra, $ra, 4         # Skip lw, make $ra point to lw's stack map.
 
     .set push
