@@ -15,6 +15,7 @@
  */
 
 #include "asm_support_mips.S"
+#include "interpreter/cfi_asm_support.h"
 
 #include "arch/quick_alloc_entrypoints.S"
 
@@ -3293,3 +3294,29 @@ ENTRY art_quick_invoke_polymorphic
 1:
     DELIVER_PENDING_EXCEPTION
 END art_quick_invoke_polymorphic
+
+    /*
+     * Wrap ExecuteSwitchImpl in assembly method which specifies DEX PC for unwinding.
+     *  Argument 0: a0: The context pointer for ExecuteSwitchImpl.
+     *  Argument 1: a1: Pointer to the templated ExecuteSwitchImpl to call.
+     *  Argument 2: a2: The value of DEX PC (memory address of the methods bytecode).
+     */
+ENTRY_NO_GP ExecuteSwitchImplAsm
+    addiu $sp, $sp, -32
+    .cfi_adjust_cfa_offset 32
+    sw    $ra, 20($sp)
+    .cfi_rel_offset 31, 20
+    sw    $s0, 16($sp)
+    .cfi_rel_offset 16, 16
+    CFI_DEFINE_DEX_PC_WITH_OFFSET(4 /* a0 */, 16 /* s0 */, 0)
+    move  $t9, $a1
+    jalr  $t9
+    move  $s0, $a2
+    lw    $ra, 20($sp)
+    .cfi_restore 31
+    lw    $s0, 16($sp)
+    .cfi_restore 16
+    jalr  $zero, $ra
+    addiu $sp, $sp, 32
+    .cfi_adjust_cfa_offset -32
+END ExecuteSwitchImplAsm
