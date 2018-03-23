@@ -9321,7 +9321,8 @@ void LocationsBuilderMIPS::VisitAbs(HAbs* abs) {
 void InstructionCodeGeneratorMIPS::GenerateAbsFP(LocationSummary* locations,
                                                  DataType::Type type,
                                                  bool isR2OrNewer,
-                                                 bool isR6) {
+                                                 bool isR6,
+                                                 bool hasMsa) {
   FRegister in = locations->InAt(0).AsFpuRegister<FRegister>();
   FRegister out = locations->Out().AsFpuRegister<FRegister>();
 
@@ -9335,7 +9336,7 @@ void InstructionCodeGeneratorMIPS::GenerateAbsFP(LocationSummary* locations,
   // But when NAN2008=0 (R2 and before), the ABS.fmt instructions can't be used. For this case, any
   // NaN operand signals invalid operation. This means that other bits (not just sign bit) might be
   // changed when doing abs(NaN). Because of that, we clear sign bit in a different way.
-  if (isR6) {
+  if (isR6 || hasMsa) {
     if (type == DataType::Type::kFloat64) {
       __ AbsD(out, in);
     } else {
@@ -9375,6 +9376,7 @@ void InstructionCodeGeneratorMIPS::VisitAbs(HAbs* abs) {
   LocationSummary* locations = abs->GetLocations();
   bool isR2OrNewer = codegen_->GetInstructionSetFeatures().IsMipsIsaRevGreaterThanEqual2();
   bool isR6 = codegen_->GetInstructionSetFeatures().IsR6();
+  bool hasMsa = codegen_->GetInstructionSetFeatures().HasMsa();
   switch (abs->GetResultType()) {
     case DataType::Type::kInt32: {
       Register in = locations->InAt(0).AsRegister<Register>();
@@ -9404,7 +9406,7 @@ void InstructionCodeGeneratorMIPS::VisitAbs(HAbs* abs) {
     }
     case DataType::Type::kFloat32:
     case DataType::Type::kFloat64:
-      GenerateAbsFP(locations, abs->GetResultType(), isR2OrNewer, isR6);
+      GenerateAbsFP(locations, abs->GetResultType(), isR2OrNewer, isR6, hasMsa);
       break;
     default:
       LOG(FATAL) << "Unexpected abs type " << abs->GetResultType();

@@ -254,7 +254,11 @@ class InstructionCodeGeneratorMIPS : public InstructionCodeGenerator {
                         bool hasMsa,
                         DataType::Type type);
   void GenerateMinMax(HBinaryOperation*, bool is_min);
-  void GenerateAbsFP(LocationSummary* locations, DataType::Type type, bool isR2OrNewer, bool isR6);
+  void GenerateAbsFP(LocationSummary* locations,
+                     DataType::Type type,
+                     bool isR2OrNewer,
+                     bool isR6,
+                     bool hasMsa);
 
   // Generate a heap reference load using one register `out`:
   //
