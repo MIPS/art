@@ -9059,6 +9059,7 @@ void InstructionCodeGeneratorMIPS::GenerateMinMaxInt(LocationSummary* locations,
 void InstructionCodeGeneratorMIPS::GenerateMinMaxFP(LocationSummary* locations,
                                                     bool is_min,
                                                     bool isR6,
+                                                    bool hasMsa,
                                                     DataType::Type type) {
   FRegister out = locations->Out().AsFpuRegister<FRegister>();
   FRegister a = locations->InAt(0).AsFpuRegister<FRegister>();
@@ -9124,7 +9125,53 @@ void InstructionCodeGeneratorMIPS::GenerateMinMaxFP(LocationSummary* locations,
     }
 
     __ Bind(&done);
+  } else if (hasMsa) {
+    MipsLabel noNaNs;
+    MipsLabel done;
+    if (type == DataType::Type::kFloat64) {
+      __ CunD(a, b);
+      __ Bc1f(&noNaNs);
+      __ CeqD(b, b);
+      __ MovtD(out, a);
+      __ MovfD(out, b);
 
+      __ B(&done);
+
+      __ Bind(&noNaNs);
+
+      if (is_min) {
+        __ FminD(static_cast<VectorRegister>(out),
+                 static_cast<VectorRegister>(a),
+                 static_cast<VectorRegister>(b));
+      } else {
+        __ FmaxD(static_cast<VectorRegister>(out),
+                 static_cast<VectorRegister>(a),
+                 static_cast<VectorRegister>(b));
+      }
+    } else {
+      DCHECK_EQ(type, DataType::Type::kFloat32);
+      __ CunS(a, b);
+      __ Bc1f(&noNaNs);
+      __ CeqS(b, b);
+      __ MovtS(out, a);
+      __ MovfS(out, b);
+
+      __ B(&done);
+
+      __ Bind(&noNaNs);
+
+      if (is_min) {
+        __ FminW(static_cast<VectorRegister>(out),
+                 static_cast<VectorRegister>(a),
+                 static_cast<VectorRegister>(b));
+      } else {
+        __ FmaxW(static_cast<VectorRegister>(out),
+                 static_cast<VectorRegister>(a),
+                 static_cast<VectorRegister>(b));
+      }
+    }
+
+    __ Bind(&done);
   } else {  // !isR6
     MipsLabel ordered;
     MipsLabel compare;
@@ -9221,6 +9268,7 @@ void InstructionCodeGeneratorMIPS::GenerateMinMaxFP(LocationSummary* locations,
 
 void InstructionCodeGeneratorMIPS::GenerateMinMax(HBinaryOperation* minmax, bool is_min) {
   bool isR6 = codegen_->GetInstructionSetFeatures().IsR6();
+  bool hasMsa = codegen_->GetInstructionSetFeatures().HasMsa();
   DataType::Type type = minmax->GetResultType();
   switch (type) {
     case DataType::Type::kInt32:
@@ -9229,7 +9277,7 @@ void InstructionCodeGeneratorMIPS::GenerateMinMax(HBinaryOperation* minmax, bool
       break;
     case DataType::Type::kFloat32:
     case DataType::Type::kFloat64:
-      GenerateMinMaxFP(minmax->GetLocations(), is_min, isR6, type);
+      GenerateMinMaxFP(minmax->GetLocations(), is_min, isR6, hasMsa, type);
       break;
     default:
       LOG(FATAL) << "Unexpected type for HMinMax " << type;
