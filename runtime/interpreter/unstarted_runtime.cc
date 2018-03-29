@@ -182,7 +182,10 @@ template<typename T>
 static ALWAYS_INLINE bool ShouldBlockAccessToMember(T* member, ShadowFrame* frame)
     REQUIRES_SHARED(Locks::mutator_lock_) {
   return hiddenapi::ShouldBlockAccessToMember(
-      member->GetAccessFlags(), frame->GetMethod()->GetDeclaringClass());
+      member,
+      frame->GetMethod()->GetDeclaringClass()->GetClassLoader(),
+      frame->GetMethod()->GetDeclaringClass()->GetDexCache(),
+      hiddenapi::kReflection);  // all uses in this file are from reflection
 }
 
 void UnstartedRuntime::UnstartedClassForNameCommon(Thread* self,

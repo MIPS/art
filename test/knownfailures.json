@@ -75,13 +75,6 @@
                         "--relocate"]
     },
     {
-        "tests": "137-cfi",
-        "variant": "interp-ac",
-        "description": ["Temporarily disable some broken tests when forcing",
-                        "access checks in interpreter"],
-        "bug": "http://b/22414682"
-    },
-    {
         "tests" : "629-vdex-speed",
         "variant": "interp-ac | no-dex2oat | interpreter | jit | relocate-npatchoat",
         "description": "629 requires compilation."
@@ -283,12 +276,8 @@
     },
     {
         "tests": "596-app-images",
-        "variant": "npictest"
-    },
-    {
-        "tests": "639-checker-code-sinking",
-        "variant": "pictest",
-        "bug": "http://b/65366606"
+        "description": "Code being tested has been disabled",
+        "bug": "b/70734839"
     },
     {
         "tests": "055-enum-performance",
@@ -351,8 +340,7 @@
     {
         "tests": ["537-checker-arraycopy",
                   "641-checker-arraycopy"],
-        "env_vars": {"ART_USE_READ_BARRIER": "true"},
-        "variant": "interpreter | optimizing | regalloc_gc | jit"
+        "env_vars": {"ART_READ_BARRIER_TYPE": "TABLELOOKUP"}
     },
     {
         "tests": ["476-clinit-inline-static-invoke",
@@ -670,12 +658,6 @@
         "description": ["Time out"]
     },
     {
-        "tests": ["130-hprof"],
-        "env_vars": {"SANITIZE_HOST": "address"},
-        "bug": "b/73060923",
-        "description": ["ASAN issue"]
-    },
-    {
         "tests": ["1941-dispose-stress", "522-checker-regression-monitor-exit"],
         "variant": "jvm",
         "bug": "b/73888836",
@@ -969,11 +951,36 @@
         ],
         "variant": "jvm",
         "bug": "b/73888836",
-        "description": ["Failing on JVM. Needs further investigating."]
+        "description": ["Failing on RI. Needs further investigating."]
+    },
+    {
+        "tests": ["616-cha-unloading",
+                  "678-quickening",
+                  "679-locks"],
+        "variant": "jvm",
+        "description": ["Doesn't run on RI."]
+    },
+    {
+        "tests": ["121-modifiers",
+                  "1929-exception-catch-exception"],
+        "variant": "jvm",
+        "bug": "b/76399183",
+        "description": ["New failures to be investigated."]
+    },
+    {
+        "tests": ["616-cha-unloading"],
+        "variant": "trace",
+        "description": ["Trace prevents class unloading."]
     },
     {
         "tests": "677-fsi",
         "variant": "no-dex2oat | no-image | no-prebuild | relocate-npatchoat | jvm",
         "description": ["Test requires a successful dex2oat invocation"]
+    },
+    {
+        "tests": ["990-field-trace",
+                  "991-field-trace-2"],
+        "variant": "gcstress & debug & target",
+        "description": ["Test can time out on gcstress with debug"]
     }
 ]

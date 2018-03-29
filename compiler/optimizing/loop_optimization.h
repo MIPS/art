@@ -20,12 +20,15 @@
 #include "base/scoped_arena_allocator.h"
 #include "base/scoped_arena_containers.h"
 #include "induction_var_range.h"
+#include "loop_analysis.h"
 #include "nodes.h"
 #include "optimization.h"
+#include "superblock_cloner.h"
 
 namespace art {
 
 class CompilerDriver;
+class ArchDefaultLoopHelper;
 
 /**
  * Loop optimizations. Builds a loop hierarchy and applies optimizations to
@@ -80,6 +83,7 @@ class HLoopOptimization : public HOptimization {
     kNoReduction     = 1 << 10,  // no reduction
     kNoSAD           = 1 << 11,  // no sum of absolute differences (SAD)
     kNoWideSAD       = 1 << 12,  // no sum of absolute differences (SAD) with operand widening
+    kNoSaturation    = 1 << 13,  // no saturation arithmetic
   };
 
   /*
@@ -134,9 +138,25 @@ class HLoopOptimization : public HOptimization {
   void SimplifyInduction(LoopNode* node);
   void SimplifyBlocks(LoopNode* node);
 
-  // Performs optimizations specific to inner loop (empty loop removal,
+  // Performs optimizations specific to inner loop with finite header logic (empty loop removal,
   // unrolling, vectorization). Returns true if anything changed.
+  bool TryOptimizeInnerLoopFinite(LoopNode* node);
+
+  // Performs optimizations specific to inner loop. Returns true if anything changed.
   bool OptimizeInnerLoop(LoopNode* node);
+
+  // Performs loop peeling/unrolling once (depends on the 'do_unrolling'); the transformation
+  // preserves the header and the loop info.
+  //
+  // Note: the function records copying information about blocks and instructions.
+  void PeelOrUnrollOnce(LoopNode* loop_node,
+                        bool do_unrolling,
+                        SuperblockCloner::HBasicBlockMap* bb_map,
+                        SuperblockCloner::HInstructionMap* hir_map);
+
+  // Tries to apply loop unrolling for branch penalty reduction and better instruction scheduling
+  // opportunities. Returns whether transformation happened.
+  bool TryUnrollingForBranchPenaltyReduction(LoopNode* loop_node);
 
   //
   // Vectorization analysis and synthesis.
@@ -177,6 +197,11 @@ class HLoopOptimization : public HOptimization {
                      bool is_unsigned = false);
 
   // Vectorization idioms.
+  bool VectorizeSaturationIdiom(LoopNode* node,
+                                HInstruction* instruction,
+                                bool generate_code,
+                                DataType::Type type,
+                                uint64_t restrictions);
   bool VectorizeHalvingAddIdiom(LoopNode* node,
                                 HInstruction* instruction,
                                 bool generate_code,
@@ -197,7 +222,6 @@ class HLoopOptimization : public HOptimization {
                             const ArrayReference* peeling_candidate);
   uint32_t MaxNumberPeeled();
   bool IsVectorizationProfitable(int64_t trip_count);
-  uint32_t GetUnrollingFactor(HBasicBlock* block, int64_t trip_count);
 
   //
   // Helpers.
@@ -290,6 +314,9 @@ class HLoopOptimization : public HOptimization {
   HBasicBlock* vector_header_;  // header of the new loop
   HBasicBlock* vector_body_;  // body of the new loop
   HInstruction* vector_index_;  // normalized index of the new loop
+
+  // Helper for target-specific behaviour for loop optimizations.
+  ArchDefaultLoopHelper* arch_loop_helper_;
 
   friend class LoopOptimizationTest;
 

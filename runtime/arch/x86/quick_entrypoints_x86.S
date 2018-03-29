@@ -15,6 +15,7 @@
  */
 
 #include "asm_support_x86.S"
+#include "interpreter/cfi_asm_support.h"
 
 #include "arch/quick_alloc_entrypoints.S"
 
@@ -1431,6 +1432,10 @@ DEFINE_FUNCTION art_quick_instance_of
 END_FUNCTION art_quick_instance_of
 
 DEFINE_FUNCTION art_quick_check_instance_of
+    // Type check using the bit string passes null as the target class. In that case just throw.
+    testl %ecx, %ecx
+    jz .Lthrow_class_cast_exception_for_bitstring_check
+
     PUSH eax                              // alignment padding
     PUSH ecx                              // pass arg2 - checked class
     PUSH eax                              // pass arg1 - obj
@@ -1448,6 +1453,7 @@ DEFINE_FUNCTION art_quick_check_instance_of
     addl LITERAL(4), %esp
     CFI_ADJUST_CFA_OFFSET(-4)
 
+.Lthrow_class_cast_exception_for_bitstring_check:
     SETUP_SAVE_ALL_CALLEE_SAVES_FRAME ebx, ebx // save all registers as basis for long jump context
     // Outgoing argument set up
     PUSH eax                              // alignment padding
@@ -2515,6 +2521,29 @@ END_MACRO
     HANDLER_TABLE_ENTRY(.Lstore_boolean_result)    // Z (boolean)
 
 END_FUNCTION art_quick_invoke_polymorphic
+
+// Wrap ExecuteSwitchImpl in assembly method which specifies DEX PC for unwinding.
+//  Argument 0: ESP+4: The context pointer for ExecuteSwitchImpl.
+//  Argument 1: ESP+8: Pointer to the templated ExecuteSwitchImpl to call.
+//  Argument 2: ESP+12: The value of DEX PC (memory address of the methods bytecode).
+DEFINE_FUNCTION ExecuteSwitchImplAsm
+    PUSH ebx                 // Spill EBX; Increments ESP, so arg0 is at ESP+8 now.
+    mov 12(%esp), %eax       // EAX = C++ templated interpreter function
+    mov 16(%esp), %ebx       // EBX = DEX PC (callee save register)
+    mov 8(%esp), %ecx        // ECX = Context argument for the function
+    CFI_DEFINE_DEX_PC_WITH_OFFSET(0 /* EAX */, 3 /* EBX */, 0)
+
+    sub LITERAL(4), %esp     // Alignment padding
+    CFI_ADJUST_CFA_OFFSET(4)
+    push %ecx                // Push argument
+    CFI_ADJUST_CFA_OFFSET(4)
+    call *%eax               // Call the wrapped function
+    addl LITERAL(8), %esp
+    CFI_ADJUST_CFA_OFFSET(-8)
+
+    POP ebx                  // Restore EBX
+    ret
+END_FUNCTION ExecuteSwitchImplAsm
 
     // TODO: implement these!
 UNIMPLEMENTED art_quick_memcmp16

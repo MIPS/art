@@ -319,8 +319,74 @@ void* Trace::RunSamplingThread(void* arg) {
   return nullptr;
 }
 
-void Trace::Start(const char* trace_filename, int trace_fd, size_t buffer_size, int flags,
-                  TraceOutputMode output_mode, TraceMode trace_mode, int interval_us) {
+void Trace::Start(const char* trace_filename,
+                  size_t buffer_size,
+                  int flags,
+                  TraceOutputMode output_mode,
+                  TraceMode trace_mode,
+                  int interval_us) {
+  std::unique_ptr<File> file(OS::CreateEmptyFileWriteOnly(trace_filename));
+  if (file == nullptr) {
+    std::string msg = android::base::StringPrintf("Unable to open trace file '%s'", trace_filename);
+    PLOG(ERROR) << msg;
+    ScopedObjectAccess soa(Thread::Current());
+    Thread::Current()->ThrowNewException("Ljava/lang/RuntimeException;", msg.c_str());
+    return;
+  }
+  Start(std::move(file), buffer_size, flags, output_mode, trace_mode, interval_us);
+}
+
+void Trace::Start(int trace_fd,
+                  size_t buffer_size,
+                  int flags,
+                  TraceOutputMode output_mode,
+                  TraceMode trace_mode,
+                  int interval_us) {
+  if (trace_fd < 0) {
+    std::string msg = android::base::StringPrintf("Unable to start tracing with invalid fd %d",
+                                                  trace_fd);
+    LOG(ERROR) << msg;
+    ScopedObjectAccess soa(Thread::Current());
+    Thread::Current()->ThrowNewException("Ljava/lang/RuntimeException;", msg.c_str());
+    return;
+  }
+  std::unique_ptr<File> file(new File(trace_fd, "tracefile"));
+  Start(std::move(file), buffer_size, flags, output_mode, trace_mode, interval_us);
+}
+
+void Trace::StartDDMS(size_t buffer_size,
+                      int flags,
+                      TraceMode trace_mode,
+                      int interval_us) {
+  Start(std::unique_ptr<File>(),
+        buffer_size,
+        flags,
+        TraceOutputMode::kDDMS,
+        trace_mode,
+        interval_us);
+}
+
+void Trace::Start(std::unique_ptr<File>&& trace_file_in,
+                  size_t buffer_size,
+                  int flags,
+                  TraceOutputMode output_mode,
+                  TraceMode trace_mode,
+                  int interval_us) {
+  // We own trace_file now and are responsible for closing it. To account for error situations, use
+  // a specialized unique_ptr to ensure we close it on the way out (if it hasn't been passed to a
+  // Trace instance).
+  auto deleter = [](File* file) {
+    if (file != nullptr) {
+      file->MarkUnchecked();  // Don't deal with flushing requirements.
+      int result ATTRIBUTE_UNUSED = file->Close();
+      delete file;
+    }
+  };
+  std::unique_ptr<File, decltype(deleter)> trace_file(trace_file_in.release(), deleter);
+  if (trace_file != nullptr) {
+    trace_file->DisableAutoClose();
+  }
+
   Thread* self = Thread::Current();
   {
     MutexLock mu(self, *Locks::trace_lock_);
@@ -336,23 +402,6 @@ void Trace::Start(const char* trace_filename, int trace_fd, size_t buffer_size, 
     ScopedObjectAccess soa(self);
     ThrowRuntimeException("Invalid sampling interval: %d", interval_us);
     return;
-  }
-
-  // Open trace file if not going directly to ddms.
-  std::unique_ptr<File> trace_file;
-  if (output_mode != TraceOutputMode::kDDMS) {
-    if (trace_fd < 0) {
-      trace_file.reset(OS::CreateEmptyFileWriteOnly(trace_filename));
-    } else {
-      trace_file.reset(new File(trace_fd, "tracefile"));
-      trace_file->DisableAutoClose();
-    }
-    if (trace_file.get() == nullptr) {
-      PLOG(ERROR) << "Unable to open trace file '" << trace_filename << "'";
-      ScopedObjectAccess soa(self);
-      ThrowRuntimeException("Unable to open trace file '%s'", trace_filename);
-      return;
-    }
   }
 
   Runtime* runtime = Runtime::Current();
@@ -372,8 +421,7 @@ void Trace::Start(const char* trace_filename, int trace_fd, size_t buffer_size, 
       LOG(ERROR) << "Trace already in progress, ignoring this request";
     } else {
       enable_stats = (flags && kTraceCountAllocs) != 0;
-      the_trace_ = new Trace(trace_file.release(), trace_filename, buffer_size, flags, output_mode,
-                             trace_mode);
+      the_trace_ = new Trace(trace_file.release(), buffer_size, flags, output_mode, trace_mode);
       if (trace_mode == TraceMode::kSampling) {
         CHECK_PTHREAD_CALL(pthread_create, (&sampling_pthread_, nullptr, &RunSamplingThread,
                                             reinterpret_cast<void*>(interval_us)),
@@ -595,8 +643,11 @@ TracingMode Trace::GetMethodTracingMode() {
 
 static constexpr size_t kMinBufSize = 18U;  // Trace header is up to 18B.
 
-Trace::Trace(File* trace_file, const char* trace_name, size_t buffer_size, int flags,
-             TraceOutputMode output_mode, TraceMode trace_mode)
+Trace::Trace(File* trace_file,
+             size_t buffer_size,
+             int flags,
+             TraceOutputMode output_mode,
+             TraceMode trace_mode)
     : trace_file_(trace_file),
       buf_(new uint8_t[std::max(kMinBufSize, buffer_size)]()),
       flags_(flags), trace_output_mode_(output_mode), trace_mode_(trace_mode),
@@ -605,6 +656,8 @@ Trace::Trace(File* trace_file, const char* trace_name, size_t buffer_size, int f
       start_time_(MicroTime()), clock_overhead_ns_(GetClockOverheadNanoSeconds()), cur_offset_(0),
       overflow_(false), interval_us_(0), streaming_lock_(nullptr),
       unique_methods_lock_(new Mutex("unique methods lock", kTracingUniqueMethodsLock)) {
+  CHECK(trace_file != nullptr || output_mode == TraceOutputMode::kDDMS);
+
   uint16_t trace_version = GetTraceVersion(clock_source_);
   if (output_mode == TraceOutputMode::kStreaming) {
     trace_version |= 0xF0U;
@@ -622,10 +675,9 @@ Trace::Trace(File* trace_file, const char* trace_name, size_t buffer_size, int f
   static_assert(18 <= kMinBufSize, "Minimum buffer size not large enough for trace header");
 
   // Update current offset.
-  cur_offset_.StoreRelaxed(kTraceHeaderLength);
+  cur_offset_.store(kTraceHeaderLength, std::memory_order_relaxed);
 
   if (output_mode == TraceOutputMode::kStreaming) {
-    streaming_file_name_ = trace_name;
     streaming_lock_ = new Mutex("tracing lock", LockLevel::kTracingStreamingLock);
     seen_threads_.reset(new ThreadIDBitSet());
   }
@@ -665,7 +717,7 @@ void Trace::FinishTracing() {
     // Clean up.
     STLDeleteValues(&seen_methods_);
   } else {
-    final_offset = cur_offset_.LoadRelaxed();
+    final_offset = cur_offset_.load(std::memory_order_relaxed);
     GetVisitedMethods(final_offset, &visited_methods);
   }
 
@@ -892,7 +944,7 @@ std::string Trace::GetMethodLine(ArtMethod* method) {
 }
 
 void Trace::WriteToBuf(const uint8_t* src, size_t src_size) {
-  int32_t old_offset = cur_offset_.LoadRelaxed();
+  int32_t old_offset = cur_offset_.load(std::memory_order_relaxed);
   int32_t new_offset = old_offset + static_cast<int32_t>(src_size);
   if (dchecked_integral_cast<size_t>(new_offset) > buffer_size_) {
     // Flush buffer.
@@ -905,24 +957,24 @@ void Trace::WriteToBuf(const uint8_t* src, size_t src_size) {
       if (!trace_file_->WriteFully(src, src_size)) {
         PLOG(WARNING) << "Failed streaming a tracing event.";
       }
-      cur_offset_.StoreRelease(0);  // Buffer is empty now.
+      cur_offset_.store(0, std::memory_order_release);  // Buffer is empty now.
       return;
     }
 
     old_offset = 0;
     new_offset = static_cast<int32_t>(src_size);
   }
-  cur_offset_.StoreRelease(new_offset);
+  cur_offset_.store(new_offset, std::memory_order_release);
   // Fill in data.
   memcpy(buf_.get() + old_offset, src, src_size);
 }
 
 void Trace::FlushBuf() {
-  int32_t offset = cur_offset_.LoadRelaxed();
+  int32_t offset = cur_offset_.load(std::memory_order_relaxed);
   if (!trace_file_->WriteFully(buf_.get(), offset)) {
     PLOG(WARNING) << "Failed flush the remaining data in streaming.";
   }
-  cur_offset_.StoreRelease(0);
+  cur_offset_.store(0, std::memory_order_release);
 }
 
 void Trace::LogMethodTraceEvent(Thread* thread, ArtMethod* method,
@@ -938,7 +990,7 @@ void Trace::LogMethodTraceEvent(Thread* thread, ArtMethod* method,
   // We do a busy loop here trying to acquire the next offset.
   if (trace_output_mode_ != TraceOutputMode::kStreaming) {
     do {
-      old_offset = cur_offset_.LoadRelaxed();
+      old_offset = cur_offset_.load(std::memory_order_relaxed);
       new_offset = old_offset + GetRecordSize(clock_source_);
       if (static_cast<size_t>(new_offset) > buffer_size_) {
         overflow_ = true;

@@ -262,16 +262,31 @@ class Thread {
       WARN_UNUSED
       REQUIRES(Locks::thread_suspend_count_lock_);
 
+  // Requests a checkpoint closure to run on another thread. The closure will be run when the thread
+  // gets suspended. This will return true if the closure was added and will (eventually) be
+  // executed. It returns false otherwise.
+  //
+  // Since multiple closures can be queued and some closures can delay other threads from running no
+  // closure should attempt to suspend another thread while running.
+  // TODO We should add some debug option that verifies this.
   bool RequestCheckpoint(Closure* function)
       REQUIRES(Locks::thread_suspend_count_lock_);
 
   // RequestSynchronousCheckpoint releases the thread_list_lock_ as a part of its execution. This is
   // due to the fact that Thread::Current() needs to go to sleep to allow the targeted thread to
-  // execute the checkpoint for us if it is Runnable.
-  bool RequestSynchronousCheckpoint(Closure* function)
+  // execute the checkpoint for us if it is Runnable. The suspend_state is the state that the thread
+  // will go into while it is awaiting the checkpoint to be run.
+  // NB Passing ThreadState::kRunnable may cause the current thread to wait in a condition variable
+  // while holding the mutator_lock_.  Callers should ensure that this will not cause any problems
+  // for the closure or the rest of the system.
+  // NB Since multiple closures can be queued and some closures can delay other threads from running
+  // no closure should attempt to suspend another thread while running.
+  bool RequestSynchronousCheckpoint(Closure* function,
+                                    ThreadState suspend_state = ThreadState::kWaiting)
       REQUIRES_SHARED(Locks::mutator_lock_)
       RELEASE(Locks::thread_list_lock_)
       REQUIRES(!Locks::thread_suspend_count_lock_);
+
   bool RequestEmptyCheckpoint()
       REQUIRES(Locks::thread_suspend_count_lock_);
 
@@ -540,7 +555,7 @@ class Thread {
   bool IsInterrupted();
   void Interrupt(Thread* self) REQUIRES(!*wait_mutex_);
   void SetInterrupted(bool i) {
-    tls32_.interrupted.StoreSequentiallyConsistent(i);
+    tls32_.interrupted.store(i, std::memory_order_seq_cst);
   }
   void Notify() REQUIRES(!*wait_mutex_);
 
@@ -1094,11 +1109,11 @@ class Thread {
   }
 
   void AtomicSetFlag(ThreadFlag flag) {
-    tls32_.state_and_flags.as_atomic_int.FetchAndBitwiseOrSequentiallyConsistent(flag);
+    tls32_.state_and_flags.as_atomic_int.fetch_or(flag, std::memory_order_seq_cst);
   }
 
   void AtomicClearFlag(ThreadFlag flag) {
-    tls32_.state_and_flags.as_atomic_int.FetchAndBitwiseAndSequentiallyConsistent(-1 ^ flag);
+    tls32_.state_and_flags.as_atomic_int.fetch_and(-1 ^ flag, std::memory_order_seq_cst);
   }
 
   void ResetQuickAllocEntryPointsForThread(bool is_marking);

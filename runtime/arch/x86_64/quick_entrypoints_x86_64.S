@@ -15,6 +15,7 @@
  */
 
 #include "asm_support_x86_64.S"
+#include "interpreter/cfi_asm_support.h"
 
 #include "arch/quick_alloc_entrypoints.S"
 
@@ -1402,6 +1403,10 @@ DEFINE_FUNCTION art_quick_unlock_object_no_inline
 END_FUNCTION art_quick_unlock_object_no_inline
 
 DEFINE_FUNCTION art_quick_check_instance_of
+    // Type check using the bit string passes null as the target class. In that case just throw.
+    testl %esi, %esi
+    jz .Lthrow_class_cast_exception_for_bitstring_check
+
     // We could check the super classes here but that is usually already checked in the caller.
     PUSH rdi                          // Save args for exc
     PUSH rsi
@@ -1425,6 +1430,7 @@ DEFINE_FUNCTION art_quick_check_instance_of
     POP rsi                           // Pop arguments
     POP rdi
 
+.Lthrow_class_cast_exception_for_bitstring_check:
     SETUP_SAVE_ALL_CALLEE_SAVES_FRAME // save all registers as basis for long jump context
     mov %gs:THREAD_SELF_OFFSET, %rdx  // pass Thread::Current()
     call SYMBOL(artThrowClassCastExceptionForObject)  // (Object* src, Class* dest, Thread*)
@@ -2481,3 +2487,18 @@ END_MACRO
     RESTORE_SAVE_REFS_AND_ARGS_FRAME
     RETURN_OR_DELIVER_PENDING_EXCEPTION
 END_FUNCTION art_quick_invoke_polymorphic
+
+// Wrap ExecuteSwitchImpl in assembly method which specifies DEX PC for unwinding.
+//  Argument 0: RDI: The context pointer for ExecuteSwitchImpl.
+//  Argument 1: RSI: Pointer to the templated ExecuteSwitchImpl to call.
+//  Argument 2: RDX: The value of DEX PC (memory address of the methods bytecode).
+DEFINE_FUNCTION ExecuteSwitchImplAsm
+    PUSH rbx                 // Spill RBX
+    movq %rdx, %rbx          // RBX = DEX PC (callee save register)
+    CFI_DEFINE_DEX_PC_WITH_OFFSET(0 /* RAX */, 3 /* RBX */, 0)
+
+    call *%rsi               // Call the wrapped function
+
+    POP rbx                  // Restore RBX
+    ret
+END_FUNCTION ExecuteSwitchImplAsm

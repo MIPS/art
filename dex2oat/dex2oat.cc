@@ -1398,8 +1398,8 @@ class Dex2Oat FINAL {
       std::unique_ptr<linker::BufferedOutputStream> vdex_out =
           std::make_unique<linker::BufferedOutputStream>(
               std::make_unique<linker::FileOutputStream>(vdex_files_.back().get()));
-      if (!vdex_out->WriteFully(&VdexFile::Header::kVdexInvalidMagic,
-                                arraysize(VdexFile::Header::kVdexInvalidMagic))) {
+      if (!vdex_out->WriteFully(&VdexFile::VerifierDepsHeader::kVdexInvalidMagic,
+                                arraysize(VdexFile::VerifierDepsHeader::kVdexInvalidMagic))) {
         PLOG(ERROR) << "Failed to invalidate vdex header. File: " << vdex_out->GetLocation();
         return false;
       }
@@ -1609,11 +1609,9 @@ class Dex2Oat FINAL {
         // Unzip or copy dex files straight to the oat file.
         std::vector<std::unique_ptr<MemMap>> opened_dex_files_map;
         std::vector<std::unique_ptr<const DexFile>> opened_dex_files;
-        // No need to verify the dex file for:
-        // 1) Dexlayout since it does the verification. It also may not pass the verification since
-        // we don't update the dex checksum.
-        // 2) when we have a vdex file, which means it was already verified.
-        const bool verify = !DoDexLayoutOptimizations() && (input_vdex_file_ == nullptr);
+        // No need to verify the dex file when we have a vdex file, which means it was already
+        // verified.
+        const bool verify = (input_vdex_file_ == nullptr);
         if (!oat_writers_[i]->WriteAndOpenDexFiles(
             vdex_files_[i].get(),
             rodata_.back(),

@@ -15,6 +15,7 @@
  */
 
 #include "asm_support_arm64.S"
+#include "interpreter/cfi_asm_support.h"
 
 #include "arch/quick_alloc_entrypoints.S"
 
@@ -1268,6 +1269,9 @@ END art_quick_unlock_object_no_inline
     .extern artInstanceOfFromCode
     .extern artThrowClassCastExceptionForObject
 ENTRY art_quick_check_instance_of
+    // Type check using the bit string passes null as the target class. In that case just throw.
+    cbz x1, .Lthrow_class_cast_exception_for_bitstring_check
+
     // Store arguments and link register
     // Stack needs to be 16B aligned on calls.
     SAVE_TWO_REGS_INCREASE_FRAME x0, x1, 32
@@ -1293,6 +1297,7 @@ ENTRY art_quick_check_instance_of
     // Restore
     RESTORE_TWO_REGS_DECREASE_FRAME x0, x1, 32
 
+.Lthrow_class_cast_exception_for_bitstring_check:
     SETUP_SAVE_ALL_CALLEE_SAVES_FRAME // save all registers as basis for long jump context
     mov x2, xSELF                     // pass Thread::Current
     bl artThrowClassCastExceptionForObject     // (Object*, Class*, Thread*)
@@ -2928,3 +2933,16 @@ ENTRY art_quick_invoke_polymorphic
     .text
 
 END  art_quick_invoke_polymorphic
+
+// Wrap ExecuteSwitchImpl in assembly method which specifies DEX PC for unwinding.
+//  Argument 0: x0: The context pointer for ExecuteSwitchImpl.
+//  Argument 1: x1: Pointer to the templated ExecuteSwitchImpl to call.
+//  Argument 2: x2: The value of DEX PC (memory address of the methods bytecode).
+ENTRY ExecuteSwitchImplAsm
+    SAVE_TWO_REGS_INCREASE_FRAME x19, xLR, 16
+    mov x19, x2                                   // x19 = DEX PC
+    CFI_DEFINE_DEX_PC_WITH_OFFSET(0 /* x0 */, 19 /* x19 */, 0)
+    blr x1                                        // Call the wrapped method.
+    RESTORE_TWO_REGS_DECREASE_FRAME x19, xLR, 16
+    ret
+END ExecuteSwitchImplAsm

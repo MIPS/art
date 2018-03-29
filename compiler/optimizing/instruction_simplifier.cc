@@ -579,7 +579,9 @@ bool InstructionSimplifierVisitor::CanEnsureNotNullAt(HInstruction* input, HInst
 
 // Returns whether doing a type test between the class of `object` against `klass` has
 // a statically known outcome. The result of the test is stored in `outcome`.
-static bool TypeCheckHasKnownOutcome(HLoadClass* klass, HInstruction* object, bool* outcome) {
+static bool TypeCheckHasKnownOutcome(ReferenceTypeInfo class_rti,
+                                     HInstruction* object,
+                                     /*out*/bool* outcome) {
   DCHECK(!object->IsNullConstant()) << "Null constants should be special cased";
   ReferenceTypeInfo obj_rti = object->GetReferenceTypeInfo();
   ScopedObjectAccess soa(Thread::Current());
@@ -589,7 +591,6 @@ static bool TypeCheckHasKnownOutcome(HLoadClass* klass, HInstruction* object, bo
     return false;
   }
 
-  ReferenceTypeInfo class_rti = klass->GetLoadedClassRTI();
   if (!class_rti.IsValid()) {
     // Happens when the loaded class is unresolved.
     return false;
@@ -614,8 +615,8 @@ static bool TypeCheckHasKnownOutcome(HLoadClass* klass, HInstruction* object, bo
 
 void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
   HInstruction* object = check_cast->InputAt(0);
-  HLoadClass* load_class = check_cast->InputAt(1)->AsLoadClass();
-  if (load_class->NeedsAccessCheck()) {
+  if (check_cast->GetTypeCheckKind() != TypeCheckKind::kBitstringCheck &&
+      check_cast->GetTargetClass()->NeedsAccessCheck()) {
     // If we need to perform an access check we cannot remove the instruction.
     return;
   }
@@ -633,15 +634,18 @@ void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
   // Note: The `outcome` is initialized to please valgrind - the compiler can reorder
   // the return value check with the `outcome` check, b/27651442 .
   bool outcome = false;
-  if (TypeCheckHasKnownOutcome(load_class, object, &outcome)) {
+  if (TypeCheckHasKnownOutcome(check_cast->GetTargetClassRTI(), object, &outcome)) {
     if (outcome) {
       check_cast->GetBlock()->RemoveInstruction(check_cast);
       MaybeRecordStat(stats_, MethodCompilationStat::kRemovedCheckedCast);
-      if (!load_class->HasUses()) {
-        // We cannot rely on DCE to remove the class because the `HLoadClass` thinks it can throw.
-        // However, here we know that it cannot because the checkcast was successfull, hence
-        // the class was already loaded.
-        load_class->GetBlock()->RemoveInstruction(load_class);
+      if (check_cast->GetTypeCheckKind() != TypeCheckKind::kBitstringCheck) {
+        HLoadClass* load_class = check_cast->GetTargetClass();
+        if (!load_class->HasUses()) {
+          // We cannot rely on DCE to remove the class because the `HLoadClass` thinks it can throw.
+          // However, here we know that it cannot because the checkcast was successfull, hence
+          // the class was already loaded.
+          load_class->GetBlock()->RemoveInstruction(load_class);
+        }
       }
     } else {
       // Don't do anything for exceptional cases for now. Ideally we should remove
@@ -652,8 +656,8 @@ void InstructionSimplifierVisitor::VisitCheckCast(HCheckCast* check_cast) {
 
 void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
   HInstruction* object = instruction->InputAt(0);
-  HLoadClass* load_class = instruction->InputAt(1)->AsLoadClass();
-  if (load_class->NeedsAccessCheck()) {
+  if (instruction->GetTypeCheckKind() != TypeCheckKind::kBitstringCheck &&
+      instruction->GetTargetClass()->NeedsAccessCheck()) {
     // If we need to perform an access check we cannot remove the instruction.
     return;
   }
@@ -676,7 +680,7 @@ void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
   // Note: The `outcome` is initialized to please valgrind - the compiler can reorder
   // the return value check with the `outcome` check, b/27651442 .
   bool outcome = false;
-  if (TypeCheckHasKnownOutcome(load_class, object, &outcome)) {
+  if (TypeCheckHasKnownOutcome(instruction->GetTargetClassRTI(), object, &outcome)) {
     MaybeRecordStat(stats_, MethodCompilationStat::kRemovedInstanceOf);
     if (outcome && can_be_null) {
       // Type test will succeed, we just need a null test.
@@ -689,11 +693,14 @@ void InstructionSimplifierVisitor::VisitInstanceOf(HInstanceOf* instruction) {
     }
     RecordSimplification();
     instruction->GetBlock()->RemoveInstruction(instruction);
-    if (outcome && !load_class->HasUses()) {
-      // We cannot rely on DCE to remove the class because the `HLoadClass` thinks it can throw.
-      // However, here we know that it cannot because the instanceof check was successfull, hence
-      // the class was already loaded.
-      load_class->GetBlock()->RemoveInstruction(load_class);
+    if (outcome && instruction->GetTypeCheckKind() != TypeCheckKind::kBitstringCheck) {
+      HLoadClass* load_class = instruction->GetTargetClass();
+      if (!load_class->HasUses()) {
+        // We cannot rely on DCE to remove the class because the `HLoadClass` thinks it can throw.
+        // However, here we know that it cannot because the instanceof check was successfull, hence
+        // the class was already loaded.
+        load_class->GetBlock()->RemoveInstruction(load_class);
+      }
     }
   }
 }
@@ -852,11 +859,29 @@ void InstructionSimplifierVisitor::VisitBooleanNot(HBooleanNot* bool_not) {
 static HInstruction* NewIntegralAbs(ArenaAllocator* allocator,
                                     HInstruction* x,
                                     HInstruction* cursor) {
-  DataType::Type type = x->GetType();
+  DataType::Type type = DataType::Kind(x->GetType());
   DCHECK(type == DataType::Type::kInt32 || type == DataType::Type::kInt64);
-  HAbs* abs = new (allocator) HAbs(type, x, x->GetDexPc());
+  HAbs* abs = new (allocator) HAbs(type, x, cursor->GetDexPc());
   cursor->GetBlock()->InsertInstructionBefore(abs, cursor);
   return abs;
+}
+
+// Constructs a new MIN/MAX(x, y) node in the HIR.
+static HInstruction* NewIntegralMinMax(ArenaAllocator* allocator,
+                                       HInstruction* x,
+                                       HInstruction* y,
+                                       HInstruction* cursor,
+                                       bool is_min) {
+  DataType::Type type = DataType::Kind(x->GetType());
+  DCHECK(type == DataType::Type::kInt32 || type == DataType::Type::kInt64);
+  HBinaryOperation* minmax = nullptr;
+  if (is_min) {
+    minmax = new (allocator) HMin(type, x, y, cursor->GetDexPc());
+  } else {
+    minmax = new (allocator) HMax(type, x, y, cursor->GetDexPc());
+  }
+  cursor->GetBlock()->InsertInstructionBefore(minmax, cursor);
+  return minmax;
 }
 
 // Returns true if operands a and b consists of widening type conversions
@@ -921,11 +946,18 @@ void InstructionSimplifierVisitor::VisitSelect(HSelect* select) {
     DataType::Type t_type = true_value->GetType();
     DataType::Type f_type = false_value->GetType();
     // Here we have a <cmp> b ? true_value : false_value.
-    // Test if both values are same-typed int or long.
-    if (t_type == f_type &&
-        (t_type == DataType::Type::kInt32 || t_type == DataType::Type::kInt64)) {
-      // Try to replace typical integral ABS constructs.
-      if (true_value->IsNeg()) {
+    // Test if both values are compatible integral types (resulting
+    // MIN/MAX/ABS type will be int or long, like the condition).
+    if (DataType::IsIntegralType(t_type) && DataType::Kind(t_type) == DataType::Kind(f_type)) {
+      // Try to replace typical integral MIN/MAX/ABS constructs.
+      if ((cmp == kCondLT || cmp == kCondLE || cmp == kCondGT || cmp == kCondGE) &&
+          ((a == true_value && b == false_value) ||
+           (b == true_value && a == false_value))) {
+        // Found a < b ? a : b (MIN) or a < b ? b : a (MAX)
+        //    or a > b ? a : b (MAX) or a > b ? b : a (MIN).
+        bool is_min = (cmp == kCondLT || cmp == kCondLE) == (a == true_value);
+        replace_with = NewIntegralMinMax(GetGraph()->GetAllocator(), a, b, select, is_min);
+      } else if (true_value->IsNeg()) {
         HInstruction* negated = true_value->InputAt(0);
         if ((cmp == kCondLT || cmp == kCondLE) &&
             (a == negated && a == false_value && IsInt64Value(b, 0))) {

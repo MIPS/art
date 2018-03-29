@@ -72,6 +72,7 @@
 #include "gc/space/space-inl.h"
 #include "gc_root-inl.h"
 #include "handle_scope-inl.h"
+#include "hidden_api.h"
 #include "image-inl.h"
 #include "imt_conflict_table.h"
 #include "imtable-inl.h"
@@ -268,9 +269,13 @@ static void WrapExceptionInInitializer(Handle<mirror::Class> klass)
   // cannot in general be guaranteed, but in all likelihood leads to breakage down the line.
   if (klass->GetClassLoader() == nullptr && !Runtime::Current()->IsAotCompiler()) {
     std::string tmp;
-    LOG(kIsDebugBuild ? FATAL : WARNING) << klass->GetDescriptor(&tmp)
-                                         << " failed initialization: "
-                                         << self->GetException()->Dump();
+    // We want to LOG(FATAL) on debug builds since this really shouldn't be happening but we need to
+    // make sure to only do it if we don't have AsyncExceptions being thrown around since those
+    // could have caused the error.
+    bool known_impossible = kIsDebugBuild && !Runtime::Current()->AreAsyncExceptionsThrown();
+    LOG(known_impossible ? FATAL : WARNING) << klass->GetDescriptor(&tmp)
+                                            << " failed initialization: "
+                                            << self->GetException()->Dump();
   }
 
   env->ExceptionClear();
@@ -1162,6 +1167,25 @@ static bool FlattenPathClassLoader(ObjPtr<mirror::ClassLoader> class_loader,
   return true;
 }
 
+class CHAOnDeleteUpdateClassVisitor {
+ public:
+  explicit CHAOnDeleteUpdateClassVisitor(LinearAlloc* alloc)
+      : allocator_(alloc), cha_(Runtime::Current()->GetClassLinker()->GetClassHierarchyAnalysis()),
+        pointer_size_(Runtime::Current()->GetClassLinker()->GetImagePointerSize()),
+        self_(Thread::Current()) {}
+
+  bool operator()(ObjPtr<mirror::Class> klass) REQUIRES_SHARED(Locks::mutator_lock_) {
+    // This class is going to be unloaded. Tell CHA about it.
+    cha_->ResetSingleImplementationInHierarchy(klass, allocator_, pointer_size_);
+    return true;
+  }
+ private:
+  const LinearAlloc* allocator_;
+  const ClassHierarchyAnalysis* cha_;
+  const PointerSize pointer_size_;
+  const Thread* self_;
+};
+
 class VerifyDeclaringClassVisitor : public ArtMethodVisitor {
  public:
   VerifyDeclaringClassVisitor() REQUIRES_SHARED(Locks::mutator_lock_, Locks::heap_bitmap_lock_)
@@ -1317,7 +1341,7 @@ void AppImageClassLoadersAndDexCachesHelper::Update(
       }
     }
   }
-  {
+  if (ClassLinker::kAppImageMayContainStrings) {
     // Fixup all the literal strings happens at app images which are supposed to be interned.
     ScopedTrace timing("Fixup String Intern in image and dex_cache");
     const auto& image_header = space->GetImageHeader();
@@ -2146,12 +2170,14 @@ ClassLinker::~ClassLinker() {
   mirror::EmulatedStackFrame::ResetClass();
   Thread* const self = Thread::Current();
   for (const ClassLoaderData& data : class_loaders_) {
-    DeleteClassLoader(self, data);
+    // CHA unloading analysis is not needed. No negative consequences are expected because
+    // all the classloaders are deleted at the same time.
+    DeleteClassLoader(self, data, false /*cleanup_cha*/);
   }
   class_loaders_.clear();
 }
 
-void ClassLinker::DeleteClassLoader(Thread* self, const ClassLoaderData& data) {
+void ClassLinker::DeleteClassLoader(Thread* self, const ClassLoaderData& data, bool cleanup_cha) {
   Runtime* const runtime = Runtime::Current();
   JavaVMExt* const vm = runtime->GetJavaVM();
   vm->DeleteWeakGlobalRef(self, data.weak_root);
@@ -2166,6 +2192,12 @@ void ClassLinker::DeleteClassLoader(Thread* self, const ClassLoaderData& data) {
     // If we don't have a JIT, we need to manually remove the CHA dependencies manually.
     cha_->RemoveDependenciesForLinearAlloc(data.allocator);
   }
+  // Cleanup references to single implementation ArtMethods that will be deleted.
+  if (cleanup_cha) {
+    CHAOnDeleteUpdateClassVisitor visitor(data.allocator);
+    data.class_table->Visit<CHAOnDeleteUpdateClassVisitor, kWithoutReadBarrier>(visitor);
+  }
+
   delete data.allocator;
   delete data.class_table;
 }
@@ -7903,6 +7935,11 @@ ArtMethod* ClassLinker::FindResolvedMethod(ObjPtr<mirror::Class> klass,
     resolved = klass->FindClassMethod(dex_cache, method_idx, image_pointer_size_);
   }
   DCHECK(resolved == nullptr || resolved->GetDeclaringClassUnchecked() != nullptr);
+  if (resolved != nullptr &&
+      hiddenapi::ShouldBlockAccessToMember(
+          resolved, class_loader, dex_cache, hiddenapi::kLinking)) {
+    resolved = nullptr;
+  }
   if (resolved != nullptr) {
     // In case of jmvti, the dex file gets verified before being registered, so first
     // check if it's registered before checking class tables.
@@ -8041,7 +8078,11 @@ ArtMethod* ClassLinker::ResolveMethodWithoutInvokeType(uint32_t method_idx,
   } else {
     resolved = klass->FindClassMethod(dex_cache.Get(), method_idx, image_pointer_size_);
   }
-
+  if (resolved != nullptr &&
+      hiddenapi::ShouldBlockAccessToMember(
+          resolved, class_loader.Get(), dex_cache.Get(), hiddenapi::kLinking)) {
+    resolved = nullptr;
+  }
   return resolved;
 }
 
@@ -8115,11 +8156,17 @@ ArtField* ClassLinker::ResolveField(uint32_t field_idx,
     } else {
       resolved = klass->FindInstanceField(name, type);
     }
-    if (resolved == nullptr) {
-      ThrowNoSuchFieldError(is_static ? "static " : "instance ", klass, type, name);
-      return nullptr;
-    }
   }
+
+  if (resolved == nullptr ||
+      hiddenapi::ShouldBlockAccessToMember(
+          resolved, class_loader.Get(), dex_cache.Get(), hiddenapi::kLinking)) {
+    const char* name = dex_file.GetFieldName(field_id);
+    const char* type = dex_file.GetFieldTypeDescriptor(field_id);
+    ThrowNoSuchFieldError(is_static ? "static " : "instance ", klass, type, name);
+    return nullptr;
+  }
+
   dex_cache->SetResolvedField(field_idx, resolved, image_pointer_size_);
   return resolved;
 }
@@ -8145,6 +8192,11 @@ ArtField* ClassLinker::ResolveFieldJLS(uint32_t field_idx,
   StringPiece name(dex_file.GetFieldName(field_id));
   StringPiece type(dex_file.GetFieldTypeDescriptor(field_id));
   resolved = mirror::Class::FindField(self, klass, name, type);
+  if (resolved != nullptr &&
+      hiddenapi::ShouldBlockAccessToMember(
+          resolved, class_loader.Get(), dex_cache.Get(), hiddenapi::kLinking)) {
+    resolved = nullptr;
+  }
   if (resolved != nullptr) {
     dex_cache->SetResolvedField(field_idx, resolved, image_pointer_size_);
   } else {
@@ -8232,29 +8284,34 @@ mirror::MethodHandle* ClassLinker::ResolveMethodHandleForField(
   DexFile::MethodHandleType handle_type =
       static_cast<DexFile::MethodHandleType>(method_handle.method_handle_type_);
   mirror::MethodHandle::Kind kind;
+  bool is_put;
   bool is_static;
   int32_t num_params;
   switch (handle_type) {
     case DexFile::MethodHandleType::kStaticPut: {
       kind = mirror::MethodHandle::Kind::kStaticPut;
+      is_put = true;
       is_static = true;
       num_params = 1;
       break;
     }
     case DexFile::MethodHandleType::kStaticGet: {
       kind = mirror::MethodHandle::Kind::kStaticGet;
+      is_put = false;
       is_static = true;
       num_params = 0;
       break;
     }
     case DexFile::MethodHandleType::kInstancePut: {
       kind = mirror::MethodHandle::Kind::kInstancePut;
+      is_put = true;
       is_static = false;
       num_params = 2;
       break;
     }
     case DexFile::MethodHandleType::kInstanceGet: {
       kind = mirror::MethodHandle::Kind::kInstanceGet;
+      is_put = false;
       is_static = false;
       num_params = 1;
       break;
@@ -8273,6 +8330,10 @@ mirror::MethodHandle* ClassLinker::ResolveMethodHandleForField(
     ObjPtr<mirror::Class> target_class = target_field->GetDeclaringClass();
     ObjPtr<mirror::Class> referring_class = referrer->GetDeclaringClass();
     if (UNLIKELY(!referring_class->CanAccessMember(target_class, target_field->GetAccessFlags()))) {
+      ThrowIllegalAccessErrorField(referring_class, target_field);
+      return nullptr;
+    }
+    if (UNLIKELY(is_put && target_field->IsFinal())) {
       ThrowIllegalAccessErrorField(referring_class, target_field);
       return nullptr;
     }
@@ -8891,7 +8952,8 @@ void ClassLinker::CleanupClassLoaders() {
     }
   }
   for (ClassLoaderData& data : to_delete) {
-    DeleteClassLoader(self, data);
+    // CHA unloading analysis and SingleImplementaion cleanups are required.
+    DeleteClassLoader(self, data, true /*cleanup_cha*/);
   }
 }
 

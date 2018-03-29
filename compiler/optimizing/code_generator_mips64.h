@@ -18,10 +18,10 @@
 #define ART_COMPILER_OPTIMIZING_CODE_GENERATOR_MIPS64_H_
 
 #include "code_generator.h"
+#include "dex/type_reference.h"
 #include "driver/compiler_options.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
-#include "type_reference.h"
 #include "utils/mips64/assembler_mips64.h"
 
 namespace art {
@@ -233,6 +233,7 @@ class InstructionCodeGeneratorMIPS64 : public InstructionCodeGenerator {
 
  private:
   void GenerateClassInitializationCheck(SlowPathCodeMIPS64* slow_path, GpuRegister class_reg);
+  void GenerateBitstringTypeCheckCompare(HTypeCheckInstruction* check, GpuRegister temp);
   void GenerateSuspendCheck(HSuspendCheck* check, HBasicBlock* successor);
   void HandleBinaryOp(HBinaryOperation* operation);
   void HandleCondition(HCondition* instruction);

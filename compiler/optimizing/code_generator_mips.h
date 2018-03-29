@@ -19,11 +19,11 @@
 
 #include "code_generator.h"
 #include "dex/dex_file_types.h"
+#include "dex/string_reference.h"
+#include "dex/type_reference.h"
 #include "driver/compiler_options.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
-#include "string_reference.h"
-#include "type_reference.h"
 #include "utils/mips/assembler_mips.h"
 
 namespace art {
@@ -237,6 +237,7 @@ class InstructionCodeGeneratorMIPS : public InstructionCodeGenerator {
  private:
   void GenerateClassInitializationCheck(SlowPathCodeMIPS* slow_path, Register class_reg);
   void GenerateSuspendCheck(HSuspendCheck* check, HBasicBlock* successor);
+  void GenerateBitstringTypeCheckCompare(HTypeCheckInstruction* check, Register temp);
   void HandleBinaryOp(HBinaryOperation* operation);
   void HandleCondition(HCondition* instruction);
   void HandleShift(HBinaryOperation* operation);

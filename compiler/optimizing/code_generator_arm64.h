@@ -21,11 +21,11 @@
 #include "code_generator.h"
 #include "common_arm64.h"
 #include "dex/dex_file_types.h"
+#include "dex/string_reference.h"
+#include "dex/type_reference.h"
 #include "driver/compiler_options.h"
 #include "nodes.h"
 #include "parallel_move_resolver.h"
-#include "string_reference.h"
-#include "type_reference.h"
 #include "utils/arm64/assembler_arm64.h"
 
 // TODO(VIXL): Make VIXL compile with -Wshadow.
@@ -264,6 +264,8 @@ class InstructionCodeGeneratorARM64 : public InstructionCodeGenerator {
  private:
   void GenerateClassInitializationCheck(SlowPathCodeARM64* slow_path,
                                         vixl::aarch64::Register class_reg);
+  void GenerateBitstringTypeCheckCompare(HTypeCheckInstruction* check,
+                                         vixl::aarch64::Register temp);
   void GenerateSuspendCheck(HSuspendCheck* instruction, HBasicBlock* successor);
   void HandleBinaryOp(HBinaryOperation* instr);
 

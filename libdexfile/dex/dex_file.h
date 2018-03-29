@@ -196,6 +196,15 @@ class DexFile {
     DISALLOW_COPY_AND_ASSIGN(MethodId);
   };
 
+  // Base code_item, compact dex and standard dex have different code item layouts.
+  struct CodeItem {
+   protected:
+    CodeItem() = default;
+
+   private:
+    DISALLOW_COPY_AND_ASSIGN(CodeItem);
+  };
+
   // Raw class_def_item.
   struct ClassDef {
     dex::TypeIndex class_idx_;  // index into type_ids_ array for this class
@@ -226,6 +235,9 @@ class DexFile {
         return access_flags_ & kAccValidClassFlags;
       }
     }
+
+    template <typename Visitor>
+    void VisitMethods(const DexFile* dex_file, const Visitor& visitor) const;
 
    private:
     DISALLOW_COPY_AND_ASSIGN(ClassDef);
@@ -298,15 +310,6 @@ class DexFile {
     uint32_t data_off_;  // Offset into data section pointing to encoded array items.
    private:
     DISALLOW_COPY_AND_ASSIGN(CallSiteIdItem);
-  };
-
-  // Base code_item, compact dex and standard dex have different code item layouts.
-  struct CodeItem {
-   protected:
-    CodeItem() = default;
-
-   private:
-    DISALLOW_COPY_AND_ASSIGN(CodeItem);
   };
 
   // Raw try_item.
@@ -989,6 +992,14 @@ class DexFile {
   ALWAYS_INLINE const StandardDexFile* AsStandardDexFile() const;
   ALWAYS_INLINE const CompactDexFile* AsCompactDexFile() const;
 
+  ALWAYS_INLINE bool IsPlatformDexFile() const {
+    return is_platform_dex_;
+  }
+
+  ALWAYS_INLINE void SetIsPlatformDexFile() {
+    is_platform_dex_ = true;
+  }
+
   bool IsInMainSection(const void* addr) const {
     return Begin() <= addr && addr < Begin() + Size();
   }
@@ -1090,6 +1101,9 @@ class DexFile {
 
   // If the dex file is a compact dex file. If false then the dex file is a standard dex file.
   const bool is_compact_dex_;
+
+  // If the dex file is located in /system/framework/.
+  bool is_platform_dex_;
 
   friend class DexFileLoader;
   friend class DexFileVerifierTest;

@@ -33,8 +33,8 @@ namespace art {
 // Enables vectorization (SIMDization) in the loop optimizer.
 static constexpr bool kEnableVectorization = true;
 
-// No loop unrolling factor (just one copy of the loop-body).
-static constexpr uint32_t kNoUnrollingFactor = 1;
+// Enables scalar loop unrolling in the loop optimizer.
+static constexpr bool kEnableScalarUnrolling = false;
 
 //
 // Static helpers.
@@ -227,6 +227,7 @@ static bool IsNarrowerOperands(HInstruction* a,
                                /*out*/ HInstruction** r,
                                /*out*/ HInstruction** s,
                                /*out*/ bool* is_unsigned) {
+  DCHECK(a != nullptr && b != nullptr);
   // Look for a matching sign extension.
   DataType::Type stype = HVecOperation::ToSignedType(type);
   if (IsSignExtensionAndGet(a, stype, r) && IsSignExtensionAndGet(b, stype, s)) {
@@ -247,6 +248,7 @@ static bool IsNarrowerOperand(HInstruction* a,
                               DataType::Type type,
                               /*out*/ HInstruction** r,
                               /*out*/ bool* is_unsigned) {
+  DCHECK(a != nullptr);
   // Look for a matching sign extension.
   DataType::Type stype = HVecOperation::ToSignedType(type);
   if (IsSignExtensionAndGet(a, stype, r)) {
@@ -270,20 +272,28 @@ static uint32_t GetOtherVL(DataType::Type other_type, DataType::Type vector_type
   return vl >> (DataType::SizeShift(other_type) - DataType::SizeShift(vector_type));
 }
 
-// Detect up to two instructions a and b, and an acccumulated constant c.
-static bool IsAddConstHelper(HInstruction* instruction,
-                             /*out*/ HInstruction** a,
-                             /*out*/ HInstruction** b,
-                             /*out*/ int64_t* c,
-                             int32_t depth) {
-  static constexpr int32_t kMaxDepth = 8;  // don't search too deep
+// Detect up to two added operands a and b and an acccumulated constant c.
+static bool IsAddConst(HInstruction* instruction,
+                       /*out*/ HInstruction** a,
+                       /*out*/ HInstruction** b,
+                       /*out*/ int64_t* c,
+                       int32_t depth = 8) {  // don't search too deep
   int64_t value = 0;
+  // Enter add/sub while still within reasonable depth.
+  if (depth > 0) {
+    if (instruction->IsAdd()) {
+      return IsAddConst(instruction->InputAt(0), a, b, c, depth - 1) &&
+             IsAddConst(instruction->InputAt(1), a, b, c, depth - 1);
+    } else if (instruction->IsSub() &&
+               IsInt64AndGet(instruction->InputAt(1), &value)) {
+      *c -= value;
+      return IsAddConst(instruction->InputAt(0), a, b, c, depth - 1);
+    }
+  }
+  // Otherwise, deal with leaf nodes.
   if (IsInt64AndGet(instruction, &value)) {
     *c += value;
     return true;
-  } else if (instruction->IsAdd() && depth <= kMaxDepth) {
-    return IsAddConstHelper(instruction->InputAt(0), a, b, c, depth + 1) &&
-           IsAddConstHelper(instruction->InputAt(1), a, b, c, depth + 1);
   } else if (*a == nullptr) {
     *a = instruction;
     return true;
@@ -291,44 +301,157 @@ static bool IsAddConstHelper(HInstruction* instruction,
     *b = instruction;
     return true;
   }
-  return false;  // too many non-const operands
+  return false;  // too many operands
 }
 
-// Detect a + b + c for an optional constant c.
-static bool IsAddConst(HInstruction* instruction,
-                       /*out*/ HInstruction** a,
-                       /*out*/ HInstruction** b,
-                       /*out*/ int64_t* c) {
-  if (instruction->IsAdd()) {
-    // Try to find a + b and accumulated c.
-    if (IsAddConstHelper(instruction->InputAt(0), a, b, c, /*depth*/ 0) &&
-        IsAddConstHelper(instruction->InputAt(1), a, b, c, /*depth*/ 0) &&
-        *b != nullptr) {
-      return true;
+// Detect a + b + c with optional constant c.
+static bool IsAddConst2(HGraph* graph,
+                        HInstruction* instruction,
+                        /*out*/ HInstruction** a,
+                        /*out*/ HInstruction** b,
+                        /*out*/ int64_t* c) {
+  if (IsAddConst(instruction, a, b, c) && *a != nullptr) {
+    if (*b == nullptr) {
+      // Constant is usually already present, unless accumulated.
+      *b = graph->GetConstant(instruction->GetType(), (*c));
+      *c = 0;
     }
-    // Found a + b.
-    *a = instruction->InputAt(0);
-    *b = instruction->InputAt(1);
-    *c = 0;
     return true;
   }
   return false;
 }
 
-// Detect a + c for constant c.
-static bool IsAddConst(HInstruction* instruction,
-                       /*out*/ HInstruction** a,
-                       /*out*/ int64_t* c) {
-  if (instruction->IsAdd()) {
-    if (IsInt64AndGet(instruction->InputAt(0), c)) {
-      *a = instruction->InputAt(1);
-      return true;
-    } else if (IsInt64AndGet(instruction->InputAt(1), c)) {
-      *a = instruction->InputAt(0);
-      return true;
-    }
+// Detect a direct a - b or a hidden a - (-c).
+static bool IsSubConst2(HGraph* graph,
+                        HInstruction* instruction,
+                        /*out*/ HInstruction** a,
+                        /*out*/ HInstruction** b) {
+  int64_t c = 0;
+  if (instruction->IsSub()) {
+    *a = instruction->InputAt(0);
+    *b = instruction->InputAt(1);
+    return true;
+  } else if (IsAddConst(instruction, a, b, &c) && *a != nullptr && *b == nullptr) {
+    // Constant for the hidden subtraction.
+    *b = graph->GetConstant(instruction->GetType(), -c);
+    return true;
   }
   return false;
+}
+
+// Detect clipped [lo, hi] range for nested MIN-MAX operations on a clippee,
+// such as MIN(hi, MAX(lo, clippee)) for an arbitrary clippee expression.
+// Example: MIN(10, MIN(20, MAX(0, x))) yields [0, 10] with clippee x.
+static HInstruction* FindClippee(HInstruction* instruction,
+                                 /*out*/ int64_t* lo,
+                                 /*out*/ int64_t* hi) {
+  // Iterate into MIN(.., c)-MAX(.., c) expressions and 'tighten' the range [lo, hi].
+  while (instruction->IsMin() || instruction->IsMax()) {
+    HBinaryOperation* min_max = instruction->AsBinaryOperation();
+    DCHECK(min_max->GetType() == DataType::Type::kInt32 ||
+           min_max->GetType() == DataType::Type::kInt64);
+    // Process the constant.
+    HConstant* right = min_max->GetConstantRight();
+    if (right == nullptr) {
+      break;
+    } else if (instruction->IsMin()) {
+      *hi = std::min(*hi, Int64FromConstant(right));
+    } else {
+      *lo = std::max(*lo, Int64FromConstant(right));
+    }
+    instruction = min_max->GetLeastConstantLeft();
+  }
+  // Iteration ends in any other expression (possibly MIN/MAX without constant).
+  // This leaf expression is the clippee with range [lo, hi].
+  return instruction;
+}
+
+// Set value range for type (or fail).
+static bool CanSetRange(DataType::Type type,
+                        /*out*/ int64_t* uhi,
+                        /*out*/ int64_t* slo,
+                        /*out*/ int64_t* shi) {
+  if (DataType::Size(type) == 1) {
+    *uhi = std::numeric_limits<uint8_t>::max();
+    *slo = std::numeric_limits<int8_t>::min();
+    *shi = std::numeric_limits<int8_t>::max();
+    return true;
+  } else if (DataType::Size(type) == 2) {
+    *uhi = std::numeric_limits<uint16_t>::max();
+    *slo = std::numeric_limits<int16_t>::min();
+    *shi = std::numeric_limits<int16_t>::max();
+    return true;
+  }
+  return false;
+}
+
+// Accept various saturated addition forms.
+static bool IsSaturatedAdd(HInstruction* a,
+                           HInstruction* b,
+                           DataType::Type type,
+                           int64_t lo,
+                           int64_t hi,
+                           bool is_unsigned) {
+  int64_t ulo = 0, uhi = 0, slo = 0, shi = 0;
+  if (!CanSetRange(type, &uhi, &slo, &shi)) {
+    return false;
+  }
+  // Tighten the range for signed single clipping on constant.
+  if (!is_unsigned) {
+    int64_t c = 0;
+    if (IsInt64AndGet(a, &c) || IsInt64AndGet(b, &c)) {
+      // For c in proper range and narrower operand r:
+      //    MIN(r + c,  127) c > 0
+      // or MAX(r + c, -128) c < 0 (and possibly redundant bound).
+      if (0 < c && c <= shi && hi == shi) {
+        if (lo <= (slo + c)) {
+          return true;
+        }
+      } else if (slo <= c && c < 0 && lo == slo) {
+        if (hi >= (shi + c)) {
+          return true;
+        }
+      }
+    }
+  }
+  // Detect for narrower operands r and s:
+  //     MIN(r + s, 255)        => SAT_ADD_unsigned
+  // MAX(MIN(r + s, 127), -128) => SAT_ADD_signed.
+  return is_unsigned ? (lo <= ulo && hi == uhi) : (lo == slo && hi == shi);
+}
+
+// Accept various saturated subtraction forms.
+static bool IsSaturatedSub(HInstruction* a,
+                           DataType::Type type,
+                           int64_t lo,
+                           int64_t hi,
+                           bool is_unsigned) {
+  int64_t ulo = 0, uhi = 0, slo = 0, shi = 0;
+  if (!CanSetRange(type, &uhi, &slo, &shi)) {
+    return false;
+  }
+  // Tighten the range for signed single clipping on constant.
+  if (!is_unsigned) {
+    int64_t c = 0;
+    if (IsInt64AndGet(a, /*out*/ &c)) {
+      // For c in proper range and narrower operand r:
+      //    MIN(c - r,  127) c > 0
+      // or MAX(c - r, -128) c < 0 (and possibly redundant bound).
+      if (0 < c && c <= shi && hi == shi) {
+        if (lo <= (c - shi)) {
+          return true;
+        }
+      } else if (slo <= c && c < 0 && lo == slo) {
+        if (hi >= (c - slo)) {
+          return true;
+        }
+      }
+    }
+  }
+  // Detect for narrower operands r and s:
+  //     MAX(r - s, 0)          => SAT_SUB_unsigned
+  // MIN(MAX(r - s, -128), 127) => SAT_ADD_signed.
+  return is_unsigned ? (lo == ulo && hi >= uhi) : (lo == slo && hi == shi);
 }
 
 // Detect reductions of the following forms,
@@ -417,7 +540,11 @@ HLoopOptimization::HLoopOptimization(HGraph* graph,
       vector_preheader_(nullptr),
       vector_header_(nullptr),
       vector_body_(nullptr),
-      vector_index_(nullptr) {
+      vector_index_(nullptr),
+      arch_loop_helper_(ArchDefaultLoopHelper::Create(compiler_driver_ != nullptr
+                                                          ? compiler_driver_->GetInstructionSet()
+                                                          : InstructionSet::kNone,
+                                                      global_allocator_)) {
 }
 
 void HLoopOptimization::Run() {
@@ -628,7 +755,7 @@ void HLoopOptimization::SimplifyBlocks(LoopNode* node) {
   }
 }
 
-bool HLoopOptimization::OptimizeInnerLoop(LoopNode* node) {
+bool HLoopOptimization::TryOptimizeInnerLoopFinite(LoopNode* node) {
   HBasicBlock* header = node->loop_info->GetHeader();
   HBasicBlock* preheader = node->loop_info->GetPreHeader();
   // Ensure loop header logic is finite.
@@ -696,6 +823,83 @@ bool HLoopOptimization::OptimizeInnerLoop(LoopNode* node) {
     return true;
   }
   return false;
+}
+
+bool HLoopOptimization::OptimizeInnerLoop(LoopNode* node) {
+  return TryOptimizeInnerLoopFinite(node) ||
+         TryUnrollingForBranchPenaltyReduction(node);
+}
+
+void HLoopOptimization::PeelOrUnrollOnce(LoopNode* loop_node,
+                                         bool do_unrolling,
+                                         SuperblockCloner::HBasicBlockMap* bb_map,
+                                         SuperblockCloner::HInstructionMap* hir_map) {
+  // TODO: peel loop nests.
+  DCHECK(loop_node->inner == nullptr);
+
+  // Check that loop info is up-to-date.
+  HLoopInformation* loop_info = loop_node->loop_info;
+  HBasicBlock* header = loop_info->GetHeader();
+  DCHECK(loop_info == header->GetLoopInformation());
+
+  PeelUnrollHelper helper(loop_info, bb_map, hir_map);
+  DCHECK(helper.IsLoopClonable());
+  HBasicBlock* new_header = do_unrolling ? helper.DoUnrolling() : helper.DoPeeling();
+  DCHECK(header == new_header);
+  DCHECK(loop_info == new_header->GetLoopInformation());
+}
+
+//
+// Loop unrolling: generic part methods.
+//
+
+bool HLoopOptimization::TryUnrollingForBranchPenaltyReduction(LoopNode* loop_node) {
+  // Don't run peeling/unrolling if compiler_driver_ is nullptr (i.e., running under tests)
+  // as InstructionSet is needed.
+  if (!kEnableScalarUnrolling || compiler_driver_ == nullptr) {
+    return false;
+  }
+
+  HLoopInformation* loop_info = loop_node->loop_info;
+  int64_t trip_count = 0;
+  // Only unroll loops with a known tripcount.
+  if (!induction_range_.HasKnownTripCount(loop_info, &trip_count)) {
+    return false;
+  }
+
+  uint32_t unrolling_factor = arch_loop_helper_->GetScalarUnrollingFactor(loop_info, trip_count);
+  if (unrolling_factor == kNoUnrollingFactor) {
+    return false;
+  }
+
+  LoopAnalysisInfo loop_analysis_info(loop_info);
+  LoopAnalysis::CalculateLoopBasicProperties(loop_info, &loop_analysis_info);
+
+  // Check "IsLoopClonable" last as it can be time-consuming.
+  if (arch_loop_helper_->IsLoopTooBigForScalarUnrolling(&loop_analysis_info) ||
+      (loop_analysis_info.GetNumberOfExits() > 1) ||
+      loop_analysis_info.HasInstructionsPreventingScalarUnrolling() ||
+      !PeelUnrollHelper::IsLoopClonable(loop_info)) {
+    return false;
+  }
+
+  // TODO: support other unrolling factors.
+  DCHECK_EQ(unrolling_factor, 2u);
+
+  // Perform unrolling.
+  ArenaAllocator* arena = loop_info->GetHeader()->GetGraph()->GetAllocator();
+  SuperblockCloner::HBasicBlockMap bb_map(
+      std::less<HBasicBlock*>(), arena->Adapter(kArenaAllocSuperblockCloner));
+  SuperblockCloner::HInstructionMap hir_map(
+      std::less<HInstruction*>(), arena->Adapter(kArenaAllocSuperblockCloner));
+  PeelOrUnrollOnce(loop_node, /* unrolling */ true, &bb_map, &hir_map);
+
+  // Remove the redundant loop check after unrolling.
+  HIf* copy_hif = bb_map.Get(loop_info->GetHeader())->GetLastInstruction()->AsIf();
+  int32_t constant = loop_info->Contains(*copy_hif->IfTrueSuccessor()) ? 1 : 0;
+  copy_hif->ReplaceInput(graph_->GetIntConstant(constant), 0u);
+
+  return true;
 }
 
 //
@@ -828,7 +1032,8 @@ void HLoopOptimization::Vectorize(LoopNode* node,
   HBasicBlock* preheader = node->loop_info->GetPreHeader();
 
   // Pick a loop unrolling factor for the vector loop.
-  uint32_t unroll = GetUnrollingFactor(block, trip_count);
+  uint32_t unroll = arch_loop_helper_->GetSIMDUnrollingFactor(
+      block, trip_count, MaxNumberPeeled(), vector_length_);
   uint32_t chunk = vector_length_ * unroll;
 
   DCHECK(trip_count == 0 || (trip_count >= MaxNumberPeeled() + chunk));
@@ -1109,7 +1314,6 @@ bool HLoopOptimization::VectorizeDef(LoopNode* node,
   return !IsUsedOutsideLoop(node->loop_info, instruction) && !instruction->DoesAnyWrite();
 }
 
-// TODO: saturation arithmetic.
 bool HLoopOptimization::VectorizeUse(LoopNode* node,
                                      HInstruction* instruction,
                                      bool generate_code,
@@ -1308,6 +1512,10 @@ bool HLoopOptimization::VectorizeUse(LoopNode* node,
       return true;
     }
   } else if (instruction->IsMin() || instruction->IsMax()) {
+    // Recognize saturation arithmetic.
+    if (VectorizeSaturationIdiom(node, instruction, generate_code, type, restrictions)) {
+      return true;
+    }
     // Deal with vector restrictions.
     HInstruction* opa = instruction->InputAt(0);
     HInstruction* opb = instruction->InputAt(1);
@@ -1321,8 +1529,7 @@ bool HLoopOptimization::VectorizeUse(LoopNode* node,
       return false;  // reject, unless all operands are same-extension narrower
     }
     // Accept MIN/MAX(x, y) for vectorizable operands.
-    DCHECK(r != nullptr);
-    DCHECK(s != nullptr);
+    DCHECK(r != nullptr && s != nullptr);
     if (generate_code && vector_mode_ != kVector) {  // de-idiom
       r = opa;
       s = opb;
@@ -1439,11 +1646,11 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
           case DataType::Type::kBool:
           case DataType::Type::kUint8:
           case DataType::Type::kInt8:
-            *restrictions |= kNoDiv;
+            *restrictions |= kNoDiv | kNoSaturation;
             return TrySetVectorLength(16);
           case DataType::Type::kUint16:
           case DataType::Type::kInt16:
-            *restrictions |= kNoDiv | kNoStringCharAt;
+            *restrictions |= kNoDiv | kNoSaturation | kNoStringCharAt;
             return TrySetVectorLength(8);
           case DataType::Type::kInt32:
             *restrictions |= kNoDiv;
@@ -1468,11 +1675,11 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
           case DataType::Type::kBool:
           case DataType::Type::kUint8:
           case DataType::Type::kInt8:
-            *restrictions |= kNoDiv;
+            *restrictions |= kNoDiv | kNoSaturation;
             return TrySetVectorLength(16);
           case DataType::Type::kUint16:
           case DataType::Type::kInt16:
-            *restrictions |= kNoDiv | kNoStringCharAt;
+            *restrictions |= kNoDiv | kNoSaturation | kNoStringCharAt;
             return TrySetVectorLength(8);
           case DataType::Type::kInt32:
             *restrictions |= kNoDiv;
@@ -1811,6 +2018,79 @@ void HLoopOptimization::GenerateVecOp(HInstruction* org,
 // Vectorization idioms.
 //
 
+// Method recognizes single and double clipping saturation arithmetic.
+bool HLoopOptimization::VectorizeSaturationIdiom(LoopNode* node,
+                                                 HInstruction* instruction,
+                                                 bool generate_code,
+                                                 DataType::Type type,
+                                                 uint64_t restrictions) {
+  // Deal with vector restrictions.
+  if (HasVectorRestrictions(restrictions, kNoSaturation)) {
+    return false;
+  }
+  // Restrict type (generalize if one day we generalize allowed MIN/MAX integral types).
+  if (instruction->GetType() != DataType::Type::kInt32 &&
+      instruction->GetType() != DataType::Type::kInt64) {
+    return false;
+  }
+  // Clipped addition or subtraction on narrower operands? We will try both
+  // formats since, e.g., x+c can be interpreted as x+c and x-(-c), depending
+  // on what clipping values are used, to get most benefits.
+  int64_t lo = std::numeric_limits<int64_t>::min();
+  int64_t hi = std::numeric_limits<int64_t>::max();
+  HInstruction* clippee = FindClippee(instruction, &lo, &hi);
+  HInstruction* a = nullptr;
+  HInstruction* b = nullptr;
+  HInstruction* r = nullptr;
+  HInstruction* s = nullptr;
+  bool is_unsigned = false;
+  bool is_add = true;
+  int64_t c = 0;
+  // First try for saturated addition.
+  if (IsAddConst2(graph_, clippee, /*out*/ &a, /*out*/ &b, /*out*/ &c) && c == 0 &&
+      IsNarrowerOperands(a, b, type, &r, &s, &is_unsigned) &&
+      IsSaturatedAdd(r, s, type, lo, hi, is_unsigned)) {
+    is_add = true;
+  } else {
+    // Then try again for saturated subtraction.
+    a = b = r = s = nullptr;
+    if (IsSubConst2(graph_, clippee, /*out*/ &a, /*out*/ &b) &&
+        IsNarrowerOperands(a, b, type, &r, &s, &is_unsigned) &&
+        IsSaturatedSub(r, type, lo, hi, is_unsigned)) {
+      is_add = false;
+    } else {
+      return false;
+    }
+  }
+  // Accept saturation idiom for vectorizable operands.
+  DCHECK(r != nullptr && s != nullptr);
+  if (generate_code && vector_mode_ != kVector) {  // de-idiom
+    r = instruction->InputAt(0);
+    s = instruction->InputAt(1);
+    restrictions &= ~(kNoHiBits | kNoMinMax);  // allow narrow MIN/MAX in seq
+  }
+  if (VectorizeUse(node, r, generate_code, type, restrictions) &&
+      VectorizeUse(node, s, generate_code, type, restrictions)) {
+    if (generate_code) {
+      if (vector_mode_ == kVector) {
+        DataType::Type vtype = HVecOperation::ToProperType(type, is_unsigned);
+        HInstruction* op1 = vector_map_->Get(r);
+        HInstruction* op2 = vector_map_->Get(s);
+        vector_map_->Put(instruction, is_add
+          ? reinterpret_cast<HInstruction*>(new (global_allocator_) HVecSaturationAdd(
+              global_allocator_, op1, op2, vtype, vector_length_, kNoDexPc))
+          : reinterpret_cast<HInstruction*>(new (global_allocator_) HVecSaturationSub(
+              global_allocator_, op1, op2, vtype, vector_length_, kNoDexPc)));
+        MaybeRecordStat(stats_, MethodCompilationStat::kLoopVectorizedIdiom);
+      } else {
+        GenerateVecOp(instruction, vector_map_->Get(r), vector_map_->Get(s), type);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 // Method recognizes the following idioms:
 //   rounding  halving add (a + b + 1) >> 1 for unsigned/signed operands a, b
 //   truncated halving add (a + b)     >> 1 for unsigned/signed operands a, b
@@ -1834,8 +2114,7 @@ bool HLoopOptimization::VectorizeHalvingAddIdiom(LoopNode* node,
     HInstruction* a = nullptr;
     HInstruction* b = nullptr;
     int64_t       c = 0;
-    if (IsAddConst(instruction->InputAt(0), /*out*/ &a, /*out*/ &b, /*out*/ &c)) {
-      DCHECK(a != nullptr && b != nullptr);
+    if (IsAddConst2(graph_, instruction->InputAt(0), /*out*/ &a, /*out*/ &b, /*out*/ &c)) {
       // Accept c == 1 (rounded) or c == 0 (not rounded).
       bool is_rounded = false;
       if (c == 1) {
@@ -1857,8 +2136,7 @@ bool HLoopOptimization::VectorizeHalvingAddIdiom(LoopNode* node,
       }
       // Accept recognized halving add for vectorizable operands. Vectorized code uses the
       // shorthand idiomatic operation. Sequential code uses the original scalar expressions.
-      DCHECK(r != nullptr);
-      DCHECK(s != nullptr);
+      DCHECK(r != nullptr && s != nullptr);
       if (generate_code && vector_mode_ != kVector) {  // de-idiom
         r = instruction->InputAt(0);
         s = instruction->InputAt(1);
@@ -1908,19 +2186,11 @@ bool HLoopOptimization::VectorizeSADIdiom(LoopNode* node,
   HInstruction* v = instruction->InputAt(1);
   HInstruction* a = nullptr;
   HInstruction* b = nullptr;
-  if (v->GetType() == reduction_type && v->IsAbs()) {
-    HInstruction* x = v->InputAt(0);
-    if (x->GetType() == reduction_type) {
-      int64_t c = 0;
-      if (x->IsSub()) {
-        a = x->InputAt(0);
-        b = x->InputAt(1);
-      } else if (IsAddConst(x, /*out*/ &a, /*out*/ &c)) {
-        b = graph_->GetConstant(reduction_type, -c);  // hidden SUB!
-      }
-    }
-  }
-  if (a == nullptr || b == nullptr) {
+  if (v->IsAbs() &&
+      v->GetType() == reduction_type &&
+      IsSubConst2(graph_, v->InputAt(0), /*out*/ &a, /*out*/ &b)) {
+    DCHECK(a != nullptr && b != nullptr);
+  } else {
     return false;
   }
   // Accept same-type or consistent sign extension for narrower-type on operands a and b.
@@ -1953,8 +2223,7 @@ bool HLoopOptimization::VectorizeSADIdiom(LoopNode* node,
   }
   // Accept SAD idiom for vectorizable operands. Vectorized code uses the shorthand
   // idiomatic operation. Sequential code uses the original scalar expressions.
-  DCHECK(r != nullptr);
-  DCHECK(s != nullptr);
+  DCHECK(r != nullptr && s != nullptr);
   if (generate_code && vector_mode_ != kVector) {  // de-idiom
     r = s = v->InputAt(0);
   }
@@ -2039,41 +2308,6 @@ bool HLoopOptimization::IsVectorizationProfitable(int64_t trip_count) {
     return false;  // insufficient iterations
   }
   return true;
-}
-
-static constexpr uint32_t ARM64_SIMD_MAXIMUM_UNROLL_FACTOR = 8;
-static constexpr uint32_t ARM64_SIMD_HEURISTIC_MAX_BODY_SIZE = 50;
-
-uint32_t HLoopOptimization::GetUnrollingFactor(HBasicBlock* block, int64_t trip_count) {
-  uint32_t max_peel = MaxNumberPeeled();
-  switch (compiler_driver_->GetInstructionSet()) {
-    case InstructionSet::kArm64: {
-      // Don't unroll with insufficient iterations.
-      // TODO: Unroll loops with unknown trip count.
-      DCHECK_NE(vector_length_, 0u);
-      if (trip_count < (2 * vector_length_ + max_peel)) {
-        return kNoUnrollingFactor;
-      }
-      // Don't unroll for large loop body size.
-      uint32_t instruction_count = block->GetInstructions().CountSize();
-      if (instruction_count >= ARM64_SIMD_HEURISTIC_MAX_BODY_SIZE) {
-        return kNoUnrollingFactor;
-      }
-      // Find a beneficial unroll factor with the following restrictions:
-      //  - At least one iteration of the transformed loop should be executed.
-      //  - The loop body shouldn't be "too big" (heuristic).
-      uint32_t uf1 = ARM64_SIMD_HEURISTIC_MAX_BODY_SIZE / instruction_count;
-      uint32_t uf2 = (trip_count - max_peel) / vector_length_;
-      uint32_t unroll_factor =
-          TruncToPowerOfTwo(std::min({uf1, uf2, ARM64_SIMD_MAXIMUM_UNROLL_FACTOR}));
-      DCHECK_GE(unroll_factor, 1u);
-      return unroll_factor;
-    }
-    case InstructionSet::kX86:
-    case InstructionSet::kX86_64:
-    default:
-      return kNoUnrollingFactor;
-  }
 }
 
 //
