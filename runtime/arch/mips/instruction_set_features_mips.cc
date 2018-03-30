@@ -39,7 +39,20 @@ enum class MipsLevel {
 
 #if defined(_MIPS_ARCH_MIPS32R6)
 static constexpr MipsLevel kRuntimeMipsLevel = MipsLevel::kR6;
-#elif defined(_MIPS_ARCH_MIPS32R5)
+#elif defined(_MIPS_ARCH_MIPS32R5) || (defined(_MIPS_ARCH_MIPS32R2) && (__mips_fpr == 64))
+// When compiling for MIPS32R5 we ask clang to actually compile for MIPS32R2 with 64-bit FPU
+// registers, which isn't exactly the same but is close enough. Compiling for MIPS32R5 directly
+// fails because there is no mips32r5 version of libgcc.a in
+// prebuilts/gcc/linux-x86/mips/mips64el-linux-android-4.9/lib/gcc/mips64el-linux-android/4.9.x.
+//
+// Based on a return value from mips64el-linux-android-gcc, build/soong/scripts/copygcclib.sh
+// copies the wrong version of libgcc.a ("default" version: mips64r6!) to out/... and linker later
+// fails with an error: incompatible target.
+//
+// Previously we'd compile for MIPS32R5 as for MIPS32R2 with 32-bit FPU registers, which caused
+// enabling of the FRE=1 mode and test failures on MIPS32R5.
+//
+// TODO: Fix this in gcc.
 static constexpr MipsLevel kRuntimeMipsLevel = MipsLevel::kR5;
 #elif defined(_MIPS_ARCH_MIPS32R2)
 static constexpr MipsLevel kRuntimeMipsLevel = MipsLevel::kR2;
