@@ -444,7 +444,31 @@ void LocationsBuilderMIPS::VisitVecSaturationAdd(HVecSaturationAdd* instruction)
 }
 
 void InstructionCodeGeneratorMIPS::VisitVecSaturationAdd(HVecSaturationAdd* instruction) {
-  LOG(FATAL) << "Unsupported SIMD " << instruction->GetId();
+  LocationSummary* locations = instruction->GetLocations();
+  VectorRegister lhs = VectorRegisterFrom(locations->InAt(0));
+  VectorRegister rhs = VectorRegisterFrom(locations->InAt(1));
+  VectorRegister dst = VectorRegisterFrom(locations->Out());
+  switch (instruction->GetPackedType()) {
+    case DataType::Type::kUint8:
+      DCHECK_EQ(16u, instruction->GetVectorLength());
+      __ Adds_uB(dst, lhs, rhs);
+      break;
+    case DataType::Type::kInt8:
+      DCHECK_EQ(16u, instruction->GetVectorLength());
+      __ Adds_sB(dst, lhs, rhs);
+      break;
+    case DataType::Type::kUint16:
+      DCHECK_EQ(8u, instruction->GetVectorLength());
+      __ Adds_uH(dst, lhs, rhs);
+      break;
+    case DataType::Type::kInt16:
+      DCHECK_EQ(8u, instruction->GetVectorLength());
+      __ Adds_sH(dst, lhs, rhs);
+      break;
+    default:
+      LOG(FATAL) << "Unsupported SIMD type: " << instruction->GetPackedType();
+      UNREACHABLE();
+  }
 }
 
 void LocationsBuilderMIPS::VisitVecHalvingAdd(HVecHalvingAdd* instruction) {
@@ -534,7 +558,31 @@ void LocationsBuilderMIPS::VisitVecSaturationSub(HVecSaturationSub* instruction)
 }
 
 void InstructionCodeGeneratorMIPS::VisitVecSaturationSub(HVecSaturationSub* instruction) {
-  LOG(FATAL) << "Unsupported SIMD " << instruction->GetId();
+  LocationSummary* locations = instruction->GetLocations();
+  VectorRegister lhs = VectorRegisterFrom(locations->InAt(0));
+  VectorRegister rhs = VectorRegisterFrom(locations->InAt(1));
+  VectorRegister dst = VectorRegisterFrom(locations->Out());
+  switch (instruction->GetPackedType()) {
+    case DataType::Type::kUint8:
+      DCHECK_EQ(16u, instruction->GetVectorLength());
+      __ Subs_uB(dst, lhs, rhs);
+      break;
+    case DataType::Type::kInt8:
+      DCHECK_EQ(16u, instruction->GetVectorLength());
+      __ Subs_sB(dst, lhs, rhs);
+      break;
+    case DataType::Type::kUint16:
+      DCHECK_EQ(8u, instruction->GetVectorLength());
+      __ Subs_uH(dst, lhs, rhs);
+      break;
+    case DataType::Type::kInt16:
+      DCHECK_EQ(8u, instruction->GetVectorLength());
+      __ Subs_sH(dst, lhs, rhs);
+      break;
+    default:
+      LOG(FATAL) << "Unsupported SIMD type: " << instruction->GetPackedType();
+      UNREACHABLE();
+  }
 }
 
 void LocationsBuilderMIPS::VisitVecMul(HVecMul* instruction) {

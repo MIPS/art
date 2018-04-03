@@ -40,7 +40,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:b\d+>> TypeConversion [<<Min>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddUByte(byte[], byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddUByte(byte[], byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Uint8 loop:<<Loop>> outer_loop:none
@@ -63,7 +63,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:b\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddSByte(byte[], byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddSByte(byte[], byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Int8 loop:<<Loop>> outer_loop:none
@@ -84,7 +84,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:s\d+>> TypeConversion [<<Min>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddUShort(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddUShort(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Uint16 loop:<<Loop>> outer_loop:none
@@ -107,7 +107,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:s\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddSShort(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddSShort(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -128,7 +128,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:b\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubUByte(byte[], byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubUByte(byte[], byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Uint8 loop:<<Loop>> outer_loop:none
@@ -151,7 +151,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:b\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubSByte(byte[], byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubSByte(byte[], byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Int8 loop:<<Loop>> outer_loop:none
@@ -172,7 +172,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:s\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubUShort(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubUShort(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Uint16 loop:<<Loop>> outer_loop:none
@@ -195,7 +195,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:s\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubSShort(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubSShort(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -211,7 +211,7 @@ public class Main {
   // Single clipping signed 8-bit saturation.
   //
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddPConstSByte(byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddPConstSByte(byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Int8 loop:<<Loop>> outer_loop:none
@@ -223,7 +223,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddNConstSByte(byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddNConstSByte(byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Int8 loop:<<Loop>> outer_loop:none
@@ -235,7 +235,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubPConstSByte(byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubPConstSByte(byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Int8 loop:<<Loop>> outer_loop:none
@@ -247,7 +247,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubNConstSByte(byte[], byte[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubNConstSByte(byte[], byte[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Int8 loop:<<Loop>> outer_loop:none
@@ -263,7 +263,7 @@ public class Main {
   // Single clipping signed 16-bit saturation.
   //
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddPConstSShort(short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddPConstSShort(short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -275,7 +275,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satAddNConstSShort(short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAddNConstSShort(short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -287,7 +287,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubPConstSShort(short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubPConstSShort(short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -299,7 +299,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satSubNConstSShort(short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satSubNConstSShort(short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Sub:d\d+>>  VecSaturationSub [<<Get1>>,<<Get2>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -378,7 +378,7 @@ public class Main {
   /// CHECK-DAG: <<Conv:s\d+>> TypeConversion [<<Max>>]             loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:               ArraySet [{{l\d+}},<<Phi>>,<<Conv>>] loop:<<Loop>>      outer_loop:none
   //
-  /// CHECK-START-{ARM,ARM64}: void Main.satAlt1(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satAlt1(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Int16 loop:<<Loop>> outer_loop:none
@@ -421,7 +421,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.usatAlt1(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.usatAlt1(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Uint16 loop:<<Loop>> outer_loop:none
@@ -434,7 +434,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.usatAlt2(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.usatAlt2(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get1>>,<<Get2>>] packed_type:Uint16 loop:<<Loop>> outer_loop:none
@@ -447,7 +447,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.usatAlt3(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.usatAlt3(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Uint16 loop:<<Loop>> outer_loop:none
@@ -463,7 +463,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.usatAlt4(short[], short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.usatAlt4(short[], short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi>>]           loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Uint16 loop:<<Loop>> outer_loop:none
@@ -479,7 +479,7 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM,ARM64}: void Main.satRedundantClip(short[], short[]) loop_optimization (after)
+  /// CHECK-START-{ARM,ARM64,MIPS64}: void Main.satRedundantClip(short[], short[]) loop_optimization (after)
   /// CHECK-DAG: <<Get1:d\d+>> VecReplicateScalar                   loop:none
   /// CHECK-DAG: <<Get2:d\d+>> VecLoad [{{l\d+}},<<Phi:i\d+>>]      loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG: <<Add:d\d+>>  VecSaturationAdd [<<Get2>>,<<Get1>>] packed_type:Int16 loop:<<Loop>> outer_loop:none

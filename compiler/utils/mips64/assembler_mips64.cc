@@ -2279,6 +2279,86 @@ void Mips64Assembler::Hadd_uD(VectorRegister wd, VectorRegister ws, VectorRegist
   EmitMsa3R(0x5, 0x3, wt, ws, wd, 0x15);
 }
 
+void Mips64Assembler::Adds_sB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x2, 0x0, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_sH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x2, 0x1, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_sW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x2, 0x2, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_sD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x2, 0x3, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_uB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x3, 0x0, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_uH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x3, 0x1, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x3, 0x2, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Adds_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x3, 0x3, wt, ws, wd, 0x10);
+}
+
+void Mips64Assembler::Subs_sB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x0, 0x0, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_sH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x0, 0x1, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_sW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x0, 0x2, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_sD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x0, 0x3, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_uB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x1, 0x0, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_uH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x1, 0x1, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x1, 0x2, wt, ws, wd, 0x11);
+}
+
+void Mips64Assembler::Subs_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  EmitMsa3R(0x1, 0x3, wt, ws, wd, 0x11);
+}
+
 void Mips64Assembler::PcntB(VectorRegister wd, VectorRegister ws) {
   CHECK(HasMsa());
   EmitMsa2R(0xc1, 0x0, ws, wd, 0x1e);

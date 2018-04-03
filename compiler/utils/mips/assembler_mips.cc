@@ -2793,6 +2793,86 @@ void MipsAssembler::Hadd_uD(VectorRegister wd, VectorRegister ws, VectorRegister
   DsFsmInstr(EmitMsa3R(0x5, 0x3, wt, ws, wd, 0x15)).FprOuts(wd).FprIns(ws, wt);
 }
 
+void MipsAssembler::Adds_sB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x2, 0x0, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_sH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x2, 0x1, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_sW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x2, 0x2, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_sD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x2, 0x3, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_uB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x3, 0x0, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_uH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x3, 0x1, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x3, 0x2, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Adds_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x3, 0x3, wt, ws, wd, 0x10)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_sB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x0, 0x0, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_sH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x0, 0x1, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_sW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x0, 0x2, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_sD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x0, 0x3, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_uB(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x1, 0x0, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_uH(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x1, 0x1, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x1, 0x2, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
+void MipsAssembler::Subs_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt) {
+  CHECK(HasMsa());
+  DsFsmInstr(EmitMsa3R(0x1, 0x3, wt, ws, wd, 0x11)).FprOuts(wd).FprIns(ws, wt);
+}
+
 void MipsAssembler::PcntB(VectorRegister wd, VectorRegister ws) {
   CHECK(HasMsa());
   DsFsmInstr(EmitMsa2R(0xc1, 0x0, ws, wd, 0x1e)).FprOuts(wd).FprIns(ws);

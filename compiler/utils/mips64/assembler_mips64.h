@@ -863,6 +863,23 @@ class Mips64Assembler FINAL : public Assembler, public JNIMacroAssembler<Pointer
   void Hadd_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt);
   void Hadd_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt);
 
+  void Adds_sB(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_sH(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_sW(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_sD(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_uB(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_uH(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Adds_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_sB(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_sH(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_sW(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_sD(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_uB(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_uH(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_uW(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+  void Subs_uD(VectorRegister wd, VectorRegister ws, VectorRegister wt);
+
   void PcntB(VectorRegister wd, VectorRegister ws);
   void PcntH(VectorRegister wd, VectorRegister ws);
   void PcntW(VectorRegister wd, VectorRegister ws);

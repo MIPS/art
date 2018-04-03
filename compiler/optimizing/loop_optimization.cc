@@ -1646,11 +1646,11 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
           case DataType::Type::kBool:
           case DataType::Type::kUint8:
           case DataType::Type::kInt8:
-            *restrictions |= kNoDiv | kNoSaturation;
+            *restrictions |= kNoDiv;
             return TrySetVectorLength(16);
           case DataType::Type::kUint16:
           case DataType::Type::kInt16:
-            *restrictions |= kNoDiv | kNoSaturation | kNoStringCharAt;
+            *restrictions |= kNoDiv | kNoStringCharAt;
             return TrySetVectorLength(8);
           case DataType::Type::kInt32:
             *restrictions |= kNoDiv;
@@ -1675,11 +1675,11 @@ bool HLoopOptimization::TrySetVectorType(DataType::Type type, uint64_t* restrict
           case DataType::Type::kBool:
           case DataType::Type::kUint8:
           case DataType::Type::kInt8:
-            *restrictions |= kNoDiv | kNoSaturation;
+            *restrictions |= kNoDiv;
             return TrySetVectorLength(16);
           case DataType::Type::kUint16:
           case DataType::Type::kInt16:
-            *restrictions |= kNoDiv | kNoSaturation | kNoStringCharAt;
+            *restrictions |= kNoDiv | kNoStringCharAt;
             return TrySetVectorLength(8);
           case DataType::Type::kInt32:
             *restrictions |= kNoDiv;

@@ -3769,6 +3769,86 @@ TEST_F(AssemblerMIPS64Test, FmsubD) {
             "fmsub.d");
 }
 
+TEST_F(AssemblerMIPS64Test, Adds_sB) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_sB, "adds_s.b ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.b");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_sH) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_sH, "adds_s.h ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.h");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_sW) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_sW, "adds_s.w ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.w");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_sD) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_sD, "adds_s.d ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.d");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_uB) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_uB, "adds_u.b ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.b");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_uH) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_uH, "adds_u.h ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.h");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_uW) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_uW, "adds_u.w ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.w");
+}
+
+TEST_F(AssemblerMIPS64Test, Adds_uD) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Adds_uD, "adds_u.d ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.d");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_sB) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_sB, "subs_s.b ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.b");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_sH) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_sH, "subs_s.h ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.h");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_sW) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_sW, "subs_s.w ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.w");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_sD) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_sD, "subs_s.d ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.d");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_uB) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_uB, "subs_u.b ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.b");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_uH) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_uH, "subs_u.h ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.h");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_uW) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_uW, "subs_u.w ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.w");
+}
+
+TEST_F(AssemblerMIPS64Test, Subs_uD) {
+  DriverStr(RepeatVVV(&mips64::Mips64Assembler::Subs_uD, "subs_u.d ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.d");
+}
+
 #undef __
 
 }  // namespace art

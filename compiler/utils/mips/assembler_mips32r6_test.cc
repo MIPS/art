@@ -2509,6 +2509,86 @@ TEST_F(AssemblerMIPS32r6Test, FmsubD) {
             "fmsub.d");
 }
 
+TEST_F(AssemblerMIPS32r6Test, Adds_sB) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_sB, "adds_s.b ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.b");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_sH) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_sH, "adds_s.h ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.h");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_sW) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_sW, "adds_s.w ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.w");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_sD) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_sD, "adds_s.d ${reg1}, ${reg2}, ${reg3}"),
+            "adds_s.d");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_uB) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_uB, "adds_u.b ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.b");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_uH) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_uH, "adds_u.h ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.h");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_uW) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_uW, "adds_u.w ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.w");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Adds_uD) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Adds_uD, "adds_u.d ${reg1}, ${reg2}, ${reg3}"),
+            "adds_u.d");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_sB) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_sB, "subs_s.b ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.b");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_sH) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_sH, "subs_s.h ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.h");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_sW) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_sW, "subs_s.w ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.w");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_sD) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_sD, "subs_s.d ${reg1}, ${reg2}, ${reg3}"),
+            "subs_s.d");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_uB) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_uB, "subs_u.b ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.b");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_uH) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_uH, "subs_u.h ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.h");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_uW) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_uW, "subs_u.w ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.w");
+}
+
+TEST_F(AssemblerMIPS32r6Test, Subs_uD) {
+  DriverStr(RepeatVVV(&mips::MipsAssembler::Subs_uD, "subs_u.d ${reg1}, ${reg2}, ${reg3}"),
+            "subs_u.d");
+}
+
 #undef __
 
 }  // namespace art
