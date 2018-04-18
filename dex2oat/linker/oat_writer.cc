@@ -31,6 +31,7 @@
 #include "base/safe_map.h"
 #include "base/stl_util.h"
 #include "base/unix_file/fd_file.h"
+#include "base/zip_archive.h"
 #include "class_linker.h"
 #include "class_table-inl.h"
 #include "compiled_method-inl.h"
@@ -40,6 +41,7 @@
 #include "dex/dex_file_loader.h"
 #include "dex/dex_file_types.h"
 #include "dex/standard_dex_file.h"
+#include "dex/type_lookup_table.h"
 #include "dex/verification_results.h"
 #include "dex_container.h"
 #include "dexlayout.h"
@@ -63,11 +65,9 @@
 #include "oat_quick_method_header.h"
 #include "quicken_info.h"
 #include "scoped_thread_state_change-inl.h"
-#include "type_lookup_table.h"
 #include "utils/dex_cache_arrays_layout-inl.h"
 #include "vdex_file.h"
 #include "verifier/verifier_deps.h"
-#include "zip_archive.h"
 
 namespace art {
 namespace linker {
@@ -445,6 +445,11 @@ OatWriter::OatWriter(bool compiling_boot_image,
     absolute_patch_locations_(),
     profile_compilation_info_(info),
     compact_dex_level_(compact_dex_level) {
+  // If we have a profile, always use at least the default compact dex level. The reason behind
+  // this is that CompactDex conversion is not more expensive than normal dexlayout.
+  if (info != nullptr && compact_dex_level_ == CompactDexLevel::kCompactDexLevelNone) {
+    compact_dex_level_ = kDefaultCompactDexLevel;
+  }
 }
 
 static bool ValidateDexFileHeader(const uint8_t* raw_header, const char* location) {
@@ -3393,7 +3398,7 @@ bool OatWriter::WriteDexFiles(OutputStream* out,
         break;
       }
       ZipEntry* entry = oat_dex_file.source_.GetZipEntry();
-      if (!entry->IsUncompressed() || !entry->IsAlignedToDexHeader()) {
+      if (!entry->IsUncompressed() || !entry->IsAlignedTo(alignof(DexFile::Header))) {
         extract_dex_files_into_vdex_ = true;
         break;
       }

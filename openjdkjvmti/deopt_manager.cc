@@ -71,6 +71,11 @@ bool JvmtiMethodInspectionCallback::IsMethodSafeToJit(art::ArtMethod* method) {
   return !manager_->MethodHasBreakpoints(method);
 }
 
+bool JvmtiMethodInspectionCallback::MethodNeedsDebugVersion(
+    art::ArtMethod* method ATTRIBUTE_UNUSED) {
+  return true;
+}
+
 DeoptManager::DeoptManager()
   : deoptimization_status_lock_("JVMTI_DeoptimizationStatusLock",
                                 static_cast<art::LockLevel>(

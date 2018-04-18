@@ -48,7 +48,6 @@
 #include "gc/accounting/remembered_set.h"
 #include "gc/accounting/space_bitmap-inl.h"
 #include "gc/collector/concurrent_copying.h"
-#include "gc/collector/mark_compact.h"
 #include "gc/collector/mark_sweep.h"
 #include "gc/collector/partial_mark_sweep.h"
 #include "gc/collector/semi_space.h"
@@ -262,7 +261,6 @@ Heap::Heap(size_t initial_size,
       verify_object_mode_(kVerifyObjectModeDisabled),
       disable_moving_gc_count_(0),
       semi_space_collector_(nullptr),
-      mark_compact_collector_(nullptr),
       concurrent_copying_collector_(nullptr),
       is_running_on_memory_tool_(Runtime::Current()->IsRunningOnMemoryTool()),
       use_tlab_(use_tlab),
@@ -602,10 +600,6 @@ Heap::Heap(size_t initial_size,
       DCHECK(region_space_ != nullptr);
       concurrent_copying_collector_->SetRegionSpace(region_space_);
       garbage_collectors_.push_back(concurrent_copying_collector_);
-    }
-    if (MayUseCollector(kCollectorTypeMC)) {
-      mark_compact_collector_ = new collector::MarkCompact(this);
-      garbage_collectors_.push_back(mark_compact_collector_);
     }
   }
   if (!GetBootImageSpaces().empty() && non_moving_space_ != nullptr &&
@@ -1209,7 +1203,8 @@ void Heap::ThrowOutOfMemoryError(Thread* self, size_t byte_count, AllocatorType 
   // If we're in a stack overflow, do not create a new exception. It would require running the
   // constructor, which will of course still be in a stack overflow.
   if (self->IsHandlingStackOverflow()) {
-    self->SetException(Runtime::Current()->GetPreAllocatedOutOfMemoryError());
+    self->SetException(
+        Runtime::Current()->GetPreAllocatedOutOfMemoryErrorWhenHandlingStackOverflow());
     return;
   }
 
@@ -2122,10 +2117,6 @@ void Heap::TransitionCollector(CollectorType collector_type) {
 void Heap::ChangeCollector(CollectorType collector_type) {
   // TODO: Only do this with all mutators suspended to avoid races.
   if (collector_type != collector_type_) {
-    if (collector_type == kCollectorTypeMC) {
-      // Don't allow mark compact unless support is compiled in.
-      CHECK(kMarkCompactSupport);
-    }
     collector_type_ = collector_type;
     gc_plan_.clear();
     switch (collector_type_) {
@@ -2138,7 +2129,6 @@ void Heap::ChangeCollector(CollectorType collector_type) {
         }
         break;
       }
-      case kCollectorTypeMC:  // Fall-through.
       case kCollectorTypeSS:  // Fall-through.
       case kCollectorTypeGSS: {
         gc_plan_.push_back(collector::kGcTypeFull);
@@ -2487,13 +2477,9 @@ collector::GarbageCollector* Heap::Compact(space::ContinuousMemMapAllocSpace* ta
     semi_space_collector_->SetToSpace(target_space);
     semi_space_collector_->Run(gc_cause, false);
     return semi_space_collector_;
-  } else {
-    CHECK(target_space->IsBumpPointerSpace())
-        << "In-place compaction is only supported for bump pointer spaces";
-    mark_compact_collector_->SetSpace(target_space->AsBumpPointerSpace());
-    mark_compact_collector_->Run(kGcCauseCollectorTransition, false);
-    return mark_compact_collector_;
   }
+  LOG(FATAL) << "Unsupported";
+  UNREACHABLE();
 }
 
 void Heap::TraceHeapSize(size_t heap_size) {
@@ -2583,14 +2569,10 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type,
       case kCollectorTypeCC:
         collector = concurrent_copying_collector_;
         break;
-      case kCollectorTypeMC:
-        mark_compact_collector_->SetSpace(bump_pointer_space_);
-        collector = mark_compact_collector_;
-        break;
       default:
         LOG(FATAL) << "Invalid collector type " << static_cast<size_t>(collector_type_);
     }
-    if (collector != mark_compact_collector_ && collector != concurrent_copying_collector_) {
+    if (collector != concurrent_copying_collector_) {
       temp_space_->GetMemMap()->Protect(PROT_READ | PROT_WRITE);
       if (kIsDebugBuild) {
         // Try to read each page of the memory map in case mprotect didn't work properly b/19894268.
@@ -3730,13 +3712,21 @@ void Heap::RequestTrim(Thread* self) {
   task_processor_->AddTask(self, added_task);
 }
 
+void Heap::IncrementNumberOfBytesFreedRevoke(size_t freed_bytes_revoke) {
+  size_t previous_num_bytes_freed_revoke =
+      num_bytes_freed_revoke_.fetch_add(freed_bytes_revoke, std::memory_order_seq_cst);
+  // Check the updated value is less than the number of bytes allocated. There is a risk of
+  // execution being suspended between the increment above and the CHECK below, leading to
+  // the use of previous_num_bytes_freed_revoke in the comparison.
+  CHECK_GE(num_bytes_allocated_.load(std::memory_order_relaxed),
+           previous_num_bytes_freed_revoke + freed_bytes_revoke);
+}
+
 void Heap::RevokeThreadLocalBuffers(Thread* thread) {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffers(thread);
     if (freed_bytes_revoke > 0U) {
-      num_bytes_freed_revoke_.fetch_add(freed_bytes_revoke, std::memory_order_seq_cst);
-      CHECK_GE(num_bytes_allocated_.load(std::memory_order_relaxed),
-               num_bytes_freed_revoke_.load(std::memory_order_relaxed));
+      IncrementNumberOfBytesFreedRevoke(freed_bytes_revoke);
     }
   }
   if (bump_pointer_space_ != nullptr) {
@@ -3751,9 +3741,7 @@ void Heap::RevokeRosAllocThreadLocalBuffers(Thread* thread) {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeThreadLocalBuffers(thread);
     if (freed_bytes_revoke > 0U) {
-      num_bytes_freed_revoke_.fetch_add(freed_bytes_revoke, std::memory_order_seq_cst);
-      CHECK_GE(num_bytes_allocated_.load(std::memory_order_relaxed),
-               num_bytes_freed_revoke_.load(std::memory_order_relaxed));
+      IncrementNumberOfBytesFreedRevoke(freed_bytes_revoke);
     }
   }
 }
@@ -3762,9 +3750,7 @@ void Heap::RevokeAllThreadLocalBuffers() {
   if (rosalloc_space_ != nullptr) {
     size_t freed_bytes_revoke = rosalloc_space_->RevokeAllThreadLocalBuffers();
     if (freed_bytes_revoke > 0U) {
-      num_bytes_freed_revoke_.fetch_add(freed_bytes_revoke, std::memory_order_seq_cst);
-      CHECK_GE(num_bytes_allocated_.load(std::memory_order_relaxed),
-               num_bytes_freed_revoke_.load(std::memory_order_relaxed));
+      IncrementNumberOfBytesFreedRevoke(freed_bytes_revoke);
     }
   }
   if (bump_pointer_space_ != nullptr) {

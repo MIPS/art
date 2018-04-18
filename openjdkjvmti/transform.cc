@@ -39,6 +39,7 @@
 
 #include "art_method.h"
 #include "base/array_ref.h"
+#include "base/mem_map.h"
 #include "class_linker.h"
 #include "dex/dex_file.h"
 #include "dex/dex_file_types.h"
@@ -51,7 +52,6 @@
 #include "jvalue.h"
 #include "jvmti.h"
 #include "linear_alloc.h"
-#include "mem_map.h"
 #include "mirror/array.h"
 #include "mirror/class-inl.h"
 #include "mirror/class_ext.h"
@@ -313,12 +313,9 @@ jvmtiError Transformer::RetransformClasses(ArtJvmTiEnv* env,
   std::vector<ArtClassDefinition> definitions;
   jvmtiError res = OK;
   for (jint i = 0; i < class_count; i++) {
-    jboolean is_modifiable = JNI_FALSE;
-    res = env->IsModifiableClass(classes[i], &is_modifiable);
+    res = Redefiner::GetClassRedefinitionError(classes[i], error_msg);
     if (res != OK) {
       return res;
-    } else if (!is_modifiable) {
-      return ERR(UNMODIFIABLE_CLASS);
     }
     ArtClassDefinition def;
     res = def.Init(self, classes[i]);

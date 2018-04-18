@@ -291,7 +291,12 @@ class Runtime {
   // Get the special object used to mark a cleared JNI weak global.
   mirror::Object* GetClearedJniWeakGlobal() REQUIRES_SHARED(Locks::mutator_lock_);
 
-  mirror::Throwable* GetPreAllocatedOutOfMemoryError() REQUIRES_SHARED(Locks::mutator_lock_);
+  mirror::Throwable* GetPreAllocatedOutOfMemoryErrorWhenThrowingException()
+      REQUIRES_SHARED(Locks::mutator_lock_);
+  mirror::Throwable* GetPreAllocatedOutOfMemoryErrorWhenThrowingOOME()
+      REQUIRES_SHARED(Locks::mutator_lock_);
+  mirror::Throwable* GetPreAllocatedOutOfMemoryErrorWhenHandlingStackOverflow()
+      REQUIRES_SHARED(Locks::mutator_lock_);
 
   mirror::Throwable* GetPreAllocatedNoClassDefFoundError()
       REQUIRES_SHARED(Locks::mutator_lock_);
@@ -663,6 +668,10 @@ class Runtime {
     safe_mode_ = mode;
   }
 
+  bool GetDumpNativeStackOnSigQuit() const {
+    return dump_native_stack_on_sig_quit_;
+  }
+
   bool GetPrunedDalvikCache() const {
     return pruned_dalvik_cache_;
   }
@@ -760,6 +769,11 @@ class Runtime {
 
   bool Init(RuntimeArgumentMap&& runtime_options)
       SHARED_TRYLOCK_FUNCTION(true, Locks::mutator_lock_);
+  void InitPreAllocatedException(Thread* self,
+                                 GcRoot<mirror::Throwable> Runtime::* exception,
+                                 const char* exception_class_descriptor,
+                                 const char* msg)
+      REQUIRES_SHARED(Locks::mutator_lock_);
   void InitNativeMethods() REQUIRES(!Locks::mutator_lock_);
   void RegisterRuntimeNativeMethods(JNIEnv* env);
 
@@ -792,7 +806,10 @@ class Runtime {
 
   // 64 bit so that we can share the same asm offsets for both 32 and 64 bits.
   uint64_t callee_save_methods_[kCalleeSaveSize];
-  GcRoot<mirror::Throwable> pre_allocated_OutOfMemoryError_;
+  // Pre-allocated exceptions (see Runtime::Init).
+  GcRoot<mirror::Throwable> pre_allocated_OutOfMemoryError_when_throwing_exception_;
+  GcRoot<mirror::Throwable> pre_allocated_OutOfMemoryError_when_throwing_oome_;
+  GcRoot<mirror::Throwable> pre_allocated_OutOfMemoryError_when_handling_stack_overflow_;
   GcRoot<mirror::Throwable> pre_allocated_NoClassDefFoundError_;
   ArtMethod* resolution_method_;
   ArtMethod* imt_conflict_method_;
@@ -1015,6 +1032,9 @@ class Runtime {
   // framework to show a UI warning. If this flag is set, always set the flag
   // when there is a warning. This is only used for testing.
   bool always_set_hidden_api_warning_flag_;
+
+  // Whether threads should dump their native stack on SIGQUIT.
+  bool dump_native_stack_on_sig_quit_;
 
   // Whether the dalvik cache was pruned when initializing the runtime.
   bool pruned_dalvik_cache_;

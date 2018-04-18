@@ -59,8 +59,8 @@ static constexpr uint64_t kLongWaitMs = 100 * kDebugThresholdFudgeFactor;
  * though, because we have a full 32 bits to work with.
  *
  * The two states of an Object's lock are referred to as "thin" and "fat".  A lock may transition
- * from the "thin" state to the "fat" state and this transition is referred to as inflation. Once
- * a lock has been inflated it remains in the "fat" state indefinitely.
+ * from the "thin" state to the "fat" state and this transition is referred to as inflation. We
+ * deflate locks from time to time as part of heap trimming.
  *
  * The lock value itself is stored in mirror::Object::monitor_ and the representation is described
  * in the LockWord value type.
@@ -1101,7 +1101,7 @@ mirror::Object* Monitor::MonitorEnter(Thread* self, mirror::Object* obj, bool tr
       case LockWord::kFatLocked: {
         // We should have done an acquire read of the lockword initially, to ensure
         // visibility of the monitor data structure. Use an explicit fence instead.
-        QuasiAtomic::ThreadFenceAcquire();
+        std::atomic_thread_fence(std::memory_order_acquire);
         Monitor* mon = lock_word.FatLockMonitor();
         if (trylock) {
           return mon->TryLock(self) ? h_obj.Get() : nullptr;

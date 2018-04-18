@@ -62,6 +62,8 @@
 #include "base/dumpable.h"
 #include "base/enums.h"
 #include "base/file_utils.h"
+#include "base/malloc_arena_pool.h"
+#include "base/mem_map_arena_pool.h"
 #include "base/memory_tool.h"
 #include "base/mutex.h"
 #include "base/os.h"
@@ -272,6 +274,7 @@ Runtime::Runtime()
       pending_hidden_api_warning_(false),
       dedupe_hidden_api_warnings_(true),
       always_set_hidden_api_warning_flag_(false),
+      dump_native_stack_on_sig_quit_(true),
       pruned_dalvik_cache_(false),
       // Initially assume we perceive jank in case the process state is never updated.
       process_state_(kProcessStateJankPerceptible),
@@ -572,19 +575,7 @@ void Runtime::Abort(const char* msg) {
     LOG(FATAL_WITHOUT_ABORT) << "Unexpectedly returned from abort hook!";
   }
 
-#if defined(__GLIBC__)
-  // TODO: we ought to be able to use pthread_kill(3) here (or abort(3),
-  // which POSIX defines in terms of raise(3), which POSIX defines in terms
-  // of pthread_kill(3)). On Linux, though, libcorkscrew can't unwind through
-  // libpthread, which means the stacks we dump would be useless. Calling
-  // tgkill(2) directly avoids that.
-  syscall(__NR_tgkill, getpid(), GetTid(), SIGABRT);
-  // TODO: LLVM installs it's own SIGABRT handler so exit to be safe... Can we disable that in LLVM?
-  // If not, we could use sigaction(3) before calling tgkill(2) and lose this call to exit(3).
-  exit(1);
-#else
   abort();
-#endif
   // notreached
 }
 
@@ -1153,6 +1144,7 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   is_explicit_gc_disabled_ = runtime_options.Exists(Opt::DisableExplicitGC);
   dex2oat_enabled_ = runtime_options.GetOrDefault(Opt::Dex2Oat);
   image_dex2oat_enabled_ = runtime_options.GetOrDefault(Opt::ImageDex2Oat);
+  dump_native_stack_on_sig_quit_ = runtime_options.GetOrDefault(Opt::DumpNativeStackOnSigQuit);
 
   vfprintf_ = runtime_options.GetOrDefault(Opt::HookVfprintf);
   exit_ = runtime_options.GetOrDefault(Opt::HookExit);
@@ -1330,13 +1322,17 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   // Use MemMap arena pool for jit, malloc otherwise. Malloc arenas are faster to allocate but
   // can't be trimmed as easily.
   const bool use_malloc = IsAotCompiler();
-  arena_pool_.reset(new ArenaPool(use_malloc, /* low_4gb */ false));
-  jit_arena_pool_.reset(
-      new ArenaPool(/* use_malloc */ false, /* low_4gb */ false, "CompilerMetadata"));
+  if (use_malloc) {
+    arena_pool_.reset(new MallocArenaPool());
+    jit_arena_pool_.reset(new MallocArenaPool());
+  } else {
+    arena_pool_.reset(new MemMapArenaPool(/* low_4gb */ false));
+    jit_arena_pool_.reset(new MemMapArenaPool(/* low_4gb */ false, "CompilerMetadata"));
+  }
 
   if (IsAotCompiler() && Is64BitInstructionSet(kRuntimeISA)) {
     // 4gb, no malloc. Explanation in header.
-    low_4gb_arena_pool_.reset(new ArenaPool(/* use_malloc */ false, /* low_4gb */ true));
+    low_4gb_arena_pool_.reset(new MemMapArenaPool(/* low_4gb */ true));
   }
   linear_alloc_.reset(CreateLinearAlloc());
 
@@ -1507,19 +1503,34 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   // TODO: move this to just be an Trace::Start argument
   Trace::SetDefaultClockSource(runtime_options.GetOrDefault(Opt::ProfileClock));
 
+  // Pre-allocate an OutOfMemoryError for the case when we fail to
+  // allocate the exception to be thrown.
+  InitPreAllocatedException(self,
+                            &Runtime::pre_allocated_OutOfMemoryError_when_throwing_exception_,
+                            "Ljava/lang/OutOfMemoryError;",
+                            "OutOfMemoryError thrown while trying to throw an exception; "
+                            "no stack trace available");
   // Pre-allocate an OutOfMemoryError for the double-OOME case.
-  self->ThrowNewException("Ljava/lang/OutOfMemoryError;",
-                          "OutOfMemoryError thrown while trying to throw OutOfMemoryError; "
-                          "no stack trace available");
-  pre_allocated_OutOfMemoryError_ = GcRoot<mirror::Throwable>(self->GetException());
-  self->ClearException();
+  InitPreAllocatedException(self,
+                            &Runtime::pre_allocated_OutOfMemoryError_when_throwing_oome_,
+                            "Ljava/lang/OutOfMemoryError;",
+                            "OutOfMemoryError thrown while trying to throw OutOfMemoryError; "
+                            "no stack trace available");
+  // Pre-allocate an OutOfMemoryError for the case when we fail to
+  // allocate while handling a stack overflow.
+  InitPreAllocatedException(self,
+                            &Runtime::pre_allocated_OutOfMemoryError_when_handling_stack_overflow_,
+                            "Ljava/lang/OutOfMemoryError;",
+                            "OutOfMemoryError thrown while trying to handle a stack overflow; "
+                            "no stack trace available");
 
   // Pre-allocate a NoClassDefFoundError for the common case of failing to find a system class
   // ahead of checking the application's class loader.
-  self->ThrowNewException("Ljava/lang/NoClassDefFoundError;",
-                          "Class not found using the boot class loader; no stack trace available");
-  pre_allocated_NoClassDefFoundError_ = GcRoot<mirror::Throwable>(self->GetException());
-  self->ClearException();
+  InitPreAllocatedException(self,
+                            &Runtime::pre_allocated_NoClassDefFoundError_,
+                            "Ljava/lang/NoClassDefFoundError;",
+                            "Class not found using the boot class loader; "
+                            "no stack trace available");
 
   // Runtime initialization is largely done now.
   // We load plugins first since that can modify the runtime state slightly.
@@ -1668,6 +1679,16 @@ void Runtime::AttachAgent(JNIEnv* env,
     ScopedObjectAccess soa(Thread::Current());
     ThrowIOException("%s", error_msg.c_str());
   }
+}
+
+void Runtime::InitPreAllocatedException(Thread* self,
+                                        GcRoot<mirror::Throwable> Runtime::* exception,
+                                        const char* exception_class_descriptor,
+                                        const char* msg) {
+  DCHECK_EQ(self, Thread::Current());
+  self->ThrowNewException(exception_class_descriptor, msg);
+  this->*exception = GcRoot<mirror::Throwable>(self->GetException());
+  self->ClearException();
 }
 
 void Runtime::InitNativeMethods() {
@@ -1921,10 +1942,26 @@ void Runtime::DetachCurrentThread() {
   thread_list_->Unregister(self);
 }
 
-mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryError() {
-  mirror::Throwable* oome = pre_allocated_OutOfMemoryError_.Read();
+mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryErrorWhenThrowingException() {
+  mirror::Throwable* oome = pre_allocated_OutOfMemoryError_when_throwing_exception_.Read();
   if (oome == nullptr) {
-    LOG(ERROR) << "Failed to return pre-allocated OOME";
+    LOG(ERROR) << "Failed to return pre-allocated OOME-when-throwing-exception";
+  }
+  return oome;
+}
+
+mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryErrorWhenThrowingOOME() {
+  mirror::Throwable* oome = pre_allocated_OutOfMemoryError_when_throwing_oome_.Read();
+  if (oome == nullptr) {
+    LOG(ERROR) << "Failed to return pre-allocated OOME-when-throwing-OOME";
+  }
+  return oome;
+}
+
+mirror::Throwable* Runtime::GetPreAllocatedOutOfMemoryErrorWhenHandlingStackOverflow() {
+  mirror::Throwable* oome = pre_allocated_OutOfMemoryError_when_handling_stack_overflow_.Read();
+  if (oome == nullptr) {
+    LOG(ERROR) << "Failed to return pre-allocated OOME-when-handling-stack-overflow";
   }
   return oome;
 }
@@ -2009,7 +2046,12 @@ void Runtime::VisitTransactionRoots(RootVisitor* visitor) {
 void Runtime::VisitNonThreadRoots(RootVisitor* visitor) {
   java_vm_->VisitRoots(visitor);
   sentinel_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
-  pre_allocated_OutOfMemoryError_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
+  pre_allocated_OutOfMemoryError_when_throwing_exception_
+      .VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
+  pre_allocated_OutOfMemoryError_when_throwing_oome_
+      .VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
+  pre_allocated_OutOfMemoryError_when_handling_stack_overflow_
+      .VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
   pre_allocated_NoClassDefFoundError_.VisitRootIfNonNull(visitor, RootInfo(kRootVMInternal));
   verifier::MethodVerifier::VisitStaticRoots(visitor);
   VisitTransactionRoots(visitor);

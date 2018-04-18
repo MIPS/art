@@ -33,6 +33,7 @@
 #include "base/enums.h"
 #include "base/length_prefixed_array.h"
 #include "base/macros.h"
+#include "base/mem_map.h"
 #include "base/os.h"
 #include "base/safe_map.h"
 #include "base/utils.h"
@@ -41,7 +42,6 @@
 #include "image.h"
 #include "intern_table.h"
 #include "lock_word.h"
-#include "mem_map.h"
 #include "mirror/dex_cache.h"
 #include "oat_file.h"
 #include "obj_ptr.h"
@@ -64,6 +64,7 @@ class ClassLoader;
 class ClassLoaderVisitor;
 class ImTable;
 class ImtConflictTable;
+class TimingLogger;
 
 static constexpr int kInvalidFd = -1;
 
@@ -81,7 +82,7 @@ class ImageWriter FINAL {
               const std::unordered_map<const DexFile*, size_t>& dex_file_oat_index_map,
               const std::unordered_set<std::string>* dirty_image_objects);
 
-  bool PrepareImageAddressSpace();
+  bool PrepareImageAddressSpace(TimingLogger* timings);
 
   bool IsImageAddressSpaceReady() const {
     DCHECK(!image_infos_.empty());

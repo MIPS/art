@@ -89,43 +89,59 @@ ART_TEST_TARGET_GTEST_EmptyUncompressed_DEX := $(basename $(ART_TEST_TARGET_GTES
 ART_TEST_HOST_GTEST_MultiDexUncompressed_DEX := $(basename $(ART_TEST_HOST_GTEST_MultiDex_DEX))Uncompressed$(suffix $(ART_TEST_HOST_GTEST_MultiDex_DEX))
 ART_TEST_TARGET_GTEST_MultiDexUncompressed_DEX := $(basename $(ART_TEST_TARGET_GTEST_MultiDex_DEX))Uncompressed$(suffix $(ART_TEST_TARGET_GTEST_MultiDex_DEX))
 
+ifdef ART_TEST_HOST_GTEST_Main_DEX
 $(ART_TEST_HOST_GTEST_MainStripped_DEX): $(ART_TEST_HOST_GTEST_Main_DEX)
 	cp $< $@
 	$(call dexpreopt-remove-classes.dex,$@)
+endif
 
+ifdef ART_TEST_TARGET_GTEST_Main_DEX
 $(ART_TEST_TARGET_GTEST_MainStripped_DEX): $(ART_TEST_TARGET_GTEST_Main_DEX)
 	cp $< $@
 	$(call dexpreopt-remove-classes.dex,$@)
+endif
 
+ifdef ART_TEST_HOST_GTEST_Main_DEX
 $(ART_TEST_HOST_GTEST_MainUncompressed_DEX): $(ART_TEST_HOST_GTEST_Main_DEX) $(ZIPALIGN)
 	cp $< $@
 	$(call uncompress-dexs, $@)
 	$(call align-package, $@)
+endif
 
+ifdef ART_TEST_TARGET_GTEST_Main_DEX
 $(ART_TEST_TARGET_GTEST_MainUncompressed_DEX): $(ART_TEST_TARGET_GTEST_Main_DEX) $(ZIPALIGN)
 	cp $< $@
 	$(call uncompress-dexs, $@)
 	$(call align-package, $@)
+endif
 
+ifdef ART_TEST_HOST_GTEST_Main_DEX
 $(ART_TEST_HOST_GTEST_EmptyUncompressed_DEX): $(ZIPALIGN)
 	touch $(dir $@)classes.dex
 	zip -j -qD -X -0 $@ $(dir $@)classes.dex
 	rm $(dir $@)classes.dex
+endif
 
+ifdef ART_TEST_TARGET_GTEST_Main_DEX
 $(ART_TEST_TARGET_GTEST_EmptyUncompressed_DEX): $(ZIPALIGN)
 	touch $(dir $@)classes.dex
 	zip -j -qD -X -0 $@ $(dir $@)classes.dex
 	rm $(dir $@)classes.dex
+endif
 
+ifdef ART_TEST_HOST_GTEST_MultiDex_DEX
 $(ART_TEST_HOST_GTEST_MultiDexUncompressed_DEX): $(ART_TEST_HOST_GTEST_MultiDex_DEX) $(ZIPALIGN)
 	cp $< $@
 	$(call uncompress-dexs, $@)
 	$(call align-package, $@)
+endif
 
+ifdef ART_TEST_TARGET_GTEST_MultiDex_DEX
 $(ART_TEST_TARGET_GTEST_MultiDexUncompressed_DEX): $(ART_TEST_TARGET_GTEST_MultiDex_DEX) $(ZIPALIGN)
 	cp $< $@
 	$(call uncompress-dexs, $@)
 	$(call align-package, $@)
+endif
 
 ART_TEST_GTEST_VerifierDeps_SRC := $(abspath $(wildcard $(LOCAL_PATH)/VerifierDeps/*.smali))
 ART_TEST_GTEST_VerifierDepsMulti_SRC := $(abspath $(wildcard $(LOCAL_PATH)/VerifierDepsMulti/*.smali))
@@ -156,6 +172,7 @@ ART_GTEST_class_loader_context_test_DEX_DEPS := Main MultiDex MyClass ForClassLo
 ART_GTEST_class_table_test_DEX_DEPS := XandY
 ART_GTEST_compiler_driver_test_DEX_DEPS := AbstractMethod StaticLeafMethods ProfileTestMultiDex
 ART_GTEST_dex_cache_test_DEX_DEPS := Main Packages MethodTypes
+ART_GTEST_dexanalyze_test_DEX_DEPS := MultiDex
 ART_GTEST_dexlayout_test_DEX_DEPS := ManyMethods
 ART_GTEST_dex2oat_test_DEX_DEPS := $(ART_GTEST_dex2oat_environment_tests_DEX_DEPS) ManyMethods Statics VerifierDeps MainUncompressed EmptyUncompressed
 ART_GTEST_dex2oat_image_test_DEX_DEPS := $(ART_GTEST_dex2oat_environment_tests_DEX_DEPS) Statics VerifierDeps
@@ -295,16 +312,24 @@ ART_GTEST_imgdiag_test_TARGET_DEPS := \
   $(TARGET_CORE_IMAGE_DEFAULT_32) \
   imgdiagd-target
 
+# Dex analyze test requires dexanalyze.
+ART_GTEST_dexanalyze_test_HOST_DEPS := \
+  dexanalyze-host
+ART_GTEST_dexanalyze_test_TARGET_DEPS := \
+  dexanalyze-target
+
 # Oatdump test requires an image and oatfile to dump.
 ART_GTEST_oatdump_test_HOST_DEPS := \
   $(HOST_CORE_IMAGE_DEFAULT_64) \
   $(HOST_CORE_IMAGE_DEFAULT_32) \
   oatdumpd-host \
-  oatdumpds-host
+  oatdumpds-host \
+  dexdump2-host
 ART_GTEST_oatdump_test_TARGET_DEPS := \
   $(TARGET_CORE_IMAGE_DEFAULT_64) \
   $(TARGET_CORE_IMAGE_DEFAULT_32) \
-  oatdumpd-target
+  oatdumpd-target \
+  dexdump2-target
 ART_GTEST_oatdump_image_test_HOST_DEPS := $(ART_GTEST_oatdump_test_HOST_DEPS)
 ART_GTEST_oatdump_image_test_TARGET_DEPS := $(ART_GTEST_oatdump_test_TARGET_DEPS)
 ART_GTEST_oatdump_app_test_HOST_DEPS := $(ART_GTEST_oatdump_test_HOST_DEPS) \
@@ -335,6 +360,7 @@ ART_TEST_MODULES := \
     art_compiler_tests \
     art_compiler_host_tests \
     art_dex2oat_tests \
+    art_dexanalyze_tests \
     art_dexdiag_tests \
     art_dexdump_tests \
     art_dexlayout_tests \
@@ -670,7 +696,7 @@ endef  # define-art-gtest-host-both
 
 ifeq ($(ART_BUILD_TARGET),true)
   $(foreach file,$(ART_TARGET_GTEST_FILES), $(eval $(call define-art-gtest-target,$(file),)))
-  ifdef TARGET_2ND_ARCH
+  ifdef 2ND_ART_PHONY_TEST_TARGET_SUFFIX
     $(foreach file,$(2ND_ART_TARGET_GTEST_FILES), $(eval $(call define-art-gtest-target,$(file),2ND_)))
   endif
   # Rules to run the different architecture versions of the gtest.
@@ -687,7 +713,7 @@ endif
 
 # Used outside the art project to get a list of the current tests
 RUNTIME_TARGET_GTEST_MAKE_TARGETS :=
-$(foreach file, $(ART_TARGET_GTEST_FILES), $(eval RUNTIME_TARGET_GTEST_MAKE_TARGETS += $$(notdir $$(basename $$(file)))))
+$(foreach file, $(ART_TARGET_GTEST_FILES), $(eval RUNTIME_TARGET_GTEST_MAKE_TARGETS += $$(notdir $$(patsubst %/,%,$$(dir $$(file))))_$$(notdir $$(basename $$(file)))))
 COMPILER_TARGET_GTEST_MAKE_TARGETS :=
 
 # Define all the combinations of host/target, valgrind and suffix such as:
@@ -730,7 +756,7 @@ $(eval $(call define-test-art-gtest-combination,target,TARGET,,))
 $(eval $(call define-test-art-gtest-combination,target,TARGET,valgrind-,))
 $(eval $(call define-test-art-gtest-combination,target,TARGET,,$(ART_PHONY_TEST_TARGET_SUFFIX)))
 $(eval $(call define-test-art-gtest-combination,target,TARGET,valgrind-,$(ART_PHONY_TEST_TARGET_SUFFIX)))
-ifdef TARGET_2ND_ARCH
+ifdef 2ND_ART_PHONY_TEST_TARGET_SUFFIX
 $(eval $(call define-test-art-gtest-combination,target,TARGET,,$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)))
 $(eval $(call define-test-art-gtest-combination,target,TARGET,valgrind-,$(2ND_ART_PHONY_TEST_TARGET_SUFFIX)))
 endif
@@ -780,6 +806,7 @@ ART_GTEST_jni_internal_test_DEX_DEPS :=
 ART_GTEST_oat_file_assistant_test_DEX_DEPS :=
 ART_GTEST_oat_file_assistant_test_HOST_DEPS :=
 ART_GTEST_oat_file_assistant_test_TARGET_DEPS :=
+ART_GTEST_dexanalyze_test_DEX_DEPS :=
 ART_GTEST_dexoptanalyzer_test_DEX_DEPS :=
 ART_GTEST_dexoptanalyzer_test_HOST_DEPS :=
 ART_GTEST_dexoptanalyzer_test_TARGET_DEPS :=

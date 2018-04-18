@@ -23,14 +23,15 @@
 #include "base/arena_containers.h"
 #include "base/arena_object.h"
 #include "base/atomic.h"
+#include "base/bit_memory_region.h"
+#include "base/malloc_arena_pool.h"
+#include "base/mem_map.h"
 #include "base/safe_map.h"
-#include "bit_memory_region.h"
 #include "dex/dex_cache_resolved_classes.h"
 #include "dex/dex_file.h"
 #include "dex/dex_file_types.h"
 #include "dex/method_reference.h"
 #include "dex/type_reference.h"
-#include "mem_map.h"
 
 namespace art {
 
@@ -439,6 +440,9 @@ class ProfileCompilationInfo {
   // the method returns false. Otherwise it returns true.
   bool UpdateProfileKeys(const std::vector<std::unique_ptr<const DexFile>>& dex_files);
 
+  // Checks if the profile is empty.
+  bool IsEmpty() const;
+
  private:
   enum ProfileLoadStatus {
     kProfileLoadWouldOverwiteData,
@@ -585,9 +589,6 @@ class ProfileCompilationInfo {
   // Return the dex data associated with the given dex file or null if the profile doesn't contain
   // the key or the checksum mismatches.
   const DexFileData* FindDexData(const DexFile* dex_file) const;
-
-  // Checks if the profile is empty.
-  bool IsEmpty() const;
 
   // Inflate the input buffer (in_buffer) of size in_size. It returns a buffer of
   // compressed data for the input buffer of "compressed_data_size" size.
@@ -792,7 +793,7 @@ class ProfileCompilationInfo {
   friend class ProfileAssistantTest;
   friend class Dex2oatLayoutTest;
 
-  ArenaPool default_arena_pool_;
+  MallocArenaPool default_arena_pool_;
   ArenaAllocator allocator_;
 
   // Vector containing the actual profile info.

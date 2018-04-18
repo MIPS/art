@@ -100,8 +100,6 @@ class CompilerDriver {
                  InstructionSet instruction_set,
                  const InstructionSetFeatures* instruction_set_features,
                  std::unordered_set<std::string>* image_classes,
-                 std::unordered_set<std::string>* compiled_classes,
-                 std::unordered_set<std::string>* compiled_methods,
                  size_t thread_count,
                  int swap_fd,
                  const ProfileCompilationInfo* profile_compilation_info);
@@ -316,9 +314,6 @@ class CompilerDriver {
   // Checks whether the provided class should be compiled, i.e., is in classes_to_compile_.
   bool IsClassToCompile(const char* descriptor) const;
 
-  // Checks whether the provided method should be compiled, i.e., is in method_to_compile_.
-  bool IsMethodToCompile(const MethodReference& method_ref) const;
-
   // Checks whether profile guided compilation is enabled and if the method should be compiled
   // according to the profile file.
   bool ShouldCompileBasedOnProfile(const MethodReference& method_ref) const;
@@ -378,11 +373,11 @@ class CompilerDriver {
     if (!android::base::EndsWith(boot_image_filename, ".art")) {
       return false;
     }
-    size_t dash_pos = boot_image_filename.find_last_of("-/");
-    if (dash_pos == std::string::npos || boot_image_filename[dash_pos] != '-') {
-      return false;
+    size_t slash_pos = boot_image_filename.rfind('/');
+    if (slash_pos == std::string::npos) {
+      return android::base::StartsWith(boot_image_filename, "core-");
     }
-    return (dash_pos >= 4u) && (boot_image_filename.compare(dash_pos - 4u, 4u, "core") == 0);
+    return boot_image_filename.compare(slash_pos + 1, 5u, "core-") == 0;
   }
 
   optimizer::DexToDexCompiler& GetDexToDexCompiler() {
@@ -505,12 +500,8 @@ class CompilerDriver {
   // This option may be restricted to the boot image, depending on a flag in the implementation.
   std::unique_ptr<std::unordered_set<std::string>> classes_to_compile_;
 
-  // Specifies the methods that will be compiled. Note that if methods_to_compile_ is null,
-  // all methods are eligible for compilation (compilation filters etc. will still apply).
-  // This option may be restricted to the boot image, depending on a flag in the implementation.
-  std::unique_ptr<std::unordered_set<std::string>> methods_to_compile_;
-
   std::atomic<uint32_t> number_of_soft_verifier_failures_;
+
   bool had_hard_verifier_failure_;
 
   // A thread pool that can (potentially) run tasks in parallel.

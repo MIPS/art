@@ -2093,4 +2093,81 @@ TEST_F(Dex2oatTest, CompactDexInZip) {
   ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) != 0) << status << " " << output_;
 }
 
+TEST_F(Dex2oatTest, AppImageNoProfile) {
+  ScratchFile app_image_file;
+  const std::string out_dir = GetScratchDir();
+  const std::string odex_location = out_dir + "/base.odex";
+  GenerateOdexForTest(GetTestDexFileName("ManyMethods"),
+                      odex_location,
+                      CompilerFilter::Filter::kSpeedProfile,
+                      { "--app-image-fd=" + std::to_string(app_image_file.GetFd()) },
+                      true,  // expect_success
+                      false,  // use_fd
+                      [](const OatFile&) {});
+  // Open our generated oat file.
+  std::string error_msg;
+  std::unique_ptr<OatFile> odex_file(OatFile::Open(odex_location.c_str(),
+                                                   odex_location.c_str(),
+                                                   nullptr,
+                                                   nullptr,
+                                                   false,
+                                                   /*low_4gb*/false,
+                                                   odex_location.c_str(),
+                                                   &error_msg));
+  ASSERT_TRUE(odex_file != nullptr);
+  ImageHeader header = {};
+  ASSERT_TRUE(app_image_file.GetFile()->PreadFully(
+      reinterpret_cast<void*>(&header),
+      sizeof(header),
+      /*offset*/ 0u)) << app_image_file.GetFile()->GetLength();
+  EXPECT_GT(header.GetImageSection(ImageHeader::kSectionObjects).Size(), 0u);
+  EXPECT_EQ(header.GetImageSection(ImageHeader::kSectionArtMethods).Size(), 0u);
+  EXPECT_EQ(header.GetImageSection(ImageHeader::kSectionArtFields).Size(), 0u);
+}
+
+TEST_F(Dex2oatClassLoaderContextTest, StoredClassLoaderContext) {
+  std::vector<std::unique_ptr<const DexFile>> dex_files = OpenTestDexFiles("MultiDex");
+  const std::string out_dir = GetScratchDir();
+  const std::string odex_location = out_dir + "/base.odex";
+  const std::string valid_context = "PCL[" + dex_files[0]->GetLocation() + "]";
+  const std::string stored_context = "PCL[/system/not_real_lib.jar]";
+  std::string expected_stored_context = "PCL[";
+  size_t index = 1;
+  for (const std::unique_ptr<const DexFile>& dex_file : dex_files) {
+    const bool is_first = index == 1u;
+    if (!is_first) {
+      expected_stored_context += ":";
+    }
+    expected_stored_context += "/system/not_real_lib.jar";
+    if (!is_first) {
+      expected_stored_context += "!classes" + std::to_string(index) + ".dex";
+    }
+    expected_stored_context += "*" + std::to_string(dex_file->GetLocationChecksum());
+    ++index;
+  }
+  expected_stored_context +=    + "]";
+  // The class path should not be valid and should fail being stored.
+  GenerateOdexForTest(GetTestDexFileName("ManyMethods"),
+                      odex_location,
+                      CompilerFilter::Filter::kQuicken,
+                      { "--class-loader-context=" + stored_context },
+                      true,  // expect_success
+                      false,  // use_fd
+                      [&](const OatFile& oat_file) {
+    EXPECT_NE(oat_file.GetClassLoaderContext(), stored_context) << output_;
+    EXPECT_NE(oat_file.GetClassLoaderContext(), valid_context) << output_;
+  });
+  // The stored context should match what we expect even though it's invalid.
+  GenerateOdexForTest(GetTestDexFileName("ManyMethods"),
+                      odex_location,
+                      CompilerFilter::Filter::kQuicken,
+                      { "--class-loader-context=" + valid_context,
+                        "--stored-class-loader-context=" + stored_context },
+                      true,  // expect_success
+                      false,  // use_fd
+                      [&](const OatFile& oat_file) {
+    EXPECT_EQ(oat_file.GetClassLoaderContext(), expected_stored_context) << output_;
+  });
+}
+
 }  // namespace art

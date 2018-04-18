@@ -39,6 +39,7 @@
 #include "art_jvmti.h"
 #include "art_method.h"
 #include "base/array_ref.h"
+#include "base/mem_map.h"
 #include "class_linker.h"
 #include "dex/dex_file.h"
 #include "dex/utf.h"
@@ -47,7 +48,6 @@
 #include "jni_env_ext-inl.h"
 #include "jvmti.h"
 #include "linear_alloc.h"
-#include "mem_map.h"
 #include "mirror/array-inl.h"
 #include "mirror/array.h"
 #include "mirror/class-inl.h"
@@ -97,6 +97,10 @@ class Redefiner {
   static std::unique_ptr<art::MemMap> MoveDataToMemMap(const std::string& original_location,
                                                        art::ArrayRef<const unsigned char> data,
                                                        std::string* error_msg);
+
+  // Helper for checking if redefinition/retransformation is allowed.
+  static jvmtiError GetClassRedefinitionError(jclass klass, /*out*/std::string* error_msg)
+      REQUIRES(!art::Locks::mutator_lock_);
 
  private:
   class ClassRedefinition {

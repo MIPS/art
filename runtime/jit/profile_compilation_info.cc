@@ -34,9 +34,8 @@
 
 #include "base/arena_allocator.h"
 #include "base/dumpable.h"
-#include "base/file_utils.h"
 #include "base/logging.h"  // For VLOG.
-#include "base/mutex.h"
+#include "base/malloc_arena_pool.h"
 #include "base/os.h"
 #include "base/safe_map.h"
 #include "base/scoped_flock.h"
@@ -45,9 +44,9 @@
 #include "base/time_utils.h"
 #include "base/unix_file/fd_file.h"
 #include "base/utils.h"
+#include "base/zip_archive.h"
 #include "dex/dex_file_loader.h"
 #include "jit/profiling_info.h"
-#include "zip_archive.h"
 
 namespace art {
 
@@ -90,7 +89,7 @@ ProfileCompilationInfo::ProfileCompilationInfo(ArenaPool* custom_arena_pool)
 }
 
 ProfileCompilationInfo::ProfileCompilationInfo()
-    : default_arena_pool_(/*use_malloc*/true, /*low_4gb*/false, "ProfileCompilationInfo"),
+    : default_arena_pool_(),
       allocator_(&default_arena_pool_),
       info_(allocator_.Adapter(kArenaAllocProfile)),
       profile_key_map_(std::less<const std::string>(), allocator_.Adapter(kArenaAllocProfile)) {

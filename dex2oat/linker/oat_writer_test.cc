@@ -110,8 +110,6 @@ class OatTest : public CommonCompilerTest {
                                               insn_set,
                                               insn_features_.get(),
                                               /* image_classes */ nullptr,
-                                              /* compiled_classes */ nullptr,
-                                              /* compiled_methods */ nullptr,
                                               /* thread_count */ 2,
                                               /* swap_fd */ -1,
                                               /* profile_compilation_info */ nullptr));
@@ -213,7 +211,8 @@ class OatTest : public CommonCompilerTest {
       class_linker->RegisterDexFile(*dex_file, nullptr);
     }
     MultiOatRelativePatcher patcher(compiler_driver_->GetInstructionSet(),
-                                    instruction_set_features_.get());
+                                    instruction_set_features_.get(),
+                                    compiler_driver_->GetCompiledMethodStorage());
     oat_writer.Initialize(compiler_driver_.get(), nullptr, dex_files);
     oat_writer.PrepareLayout(&patcher);
     elf_writer->PrepareDynamicSection(oat_writer.GetOatHeader().GetExecutableOffset(),

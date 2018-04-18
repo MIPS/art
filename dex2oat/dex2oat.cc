@@ -55,6 +55,7 @@
 #include "base/timing_logger.h"
 #include "base/unix_file/fd_file.h"
 #include "base/utils.h"
+#include "base/zip_archive.h"
 #include "class_linker.h"
 #include "class_loader_context.h"
 #include "cmdline_parser.h"
@@ -98,7 +99,6 @@
 #include "vdex_file.h"
 #include "verifier/verifier_deps.h"
 #include "well_known_classes.h"
-#include "zip_archive.h"
 
 namespace art {
 
@@ -404,6 +404,7 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      Example: --very-large-app-threshold=100000000");
   UsageError("");
   UsageError("  --app-image-fd=<file-descriptor>: specify output file descriptor for app image.");
+  UsageError("      The image is non-empty only if a profile is passed in.");
   UsageError("      Example: --app-image-fd=10");
   UsageError("");
   UsageError("  --app-image-file=<file-name>: specify a file name for app image.");
@@ -426,6 +427,10 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("");
   UsageError("  --class-loader-context=<string spec>: a string specifying the intended");
   UsageError("      runtime loading context for the compiled dex files.");
+  UsageError("");
+  UsageError("  --stored-class-loader-context=<string spec>: a string specifying the intended");
+  UsageError("      runtime loading context that is stored in the oat file. Overrides");
+  UsageError("      --class-loader-context. Note that this ignores the classpath_dir arg.");
   UsageError("");
   UsageError("      It describes how the class loader chain should be built in order to ensure");
   UsageError("      classes are resolved during dex2aot as they would be resolved at runtime.");
@@ -453,7 +458,9 @@ NO_RETURN static void Usage(const char* fmt, ...) {
   UsageError("      The image writer will group them together.");
   UsageError("");
   UsageError("  --compact-dex-level=none|fast: None avoids generating compact dex, fast");
-  UsageError("      generates compact dex with low compile time.");
+  UsageError("      generates compact dex with low compile time. If speed-profile is specified as");
+  UsageError("      the compiler filter and the profile is not empty, the default compact dex");
+  UsageError("      level is always used.");
   UsageError("");
   UsageError("  --deduplicate-code=true|false: enable|disable code deduplication. Deduplicated");
   UsageError("      code will have an arbitrary symbol tagged with [DEDUPED].");
@@ -622,10 +629,6 @@ class Dex2Oat FINAL {
       image_classes_zip_filename_(nullptr),
       image_classes_filename_(nullptr),
       image_storage_mode_(ImageHeader::kStorageModeUncompressed),
-      compiled_classes_zip_filename_(nullptr),
-      compiled_classes_filename_(nullptr),
-      compiled_methods_zip_filename_(nullptr),
-      compiled_methods_filename_(nullptr),
       passes_to_run_filename_(nullptr),
       dirty_image_objects_filename_(nullptr),
       multi_image_(false),
@@ -749,7 +752,7 @@ class Dex2Oat FINAL {
     }
 
     if ((output_vdex_fd_ == -1) != (oat_fd_ == -1)) {
-      Usage("VDEX and OAT output must be specified either with one --oat-filename "
+      Usage("VDEX and OAT output must be specified either with one --oat-file "
             "or with --oat-fd and --output-vdex-fd file descriptors");
     }
 
@@ -811,18 +814,6 @@ class Dex2Oat FINAL {
       Usage("--image-classes-zip should be used with --image-classes");
     }
 
-    if (compiled_classes_filename_ != nullptr && !IsBootImage()) {
-      Usage("--compiled-classes should only be used with --image");
-    }
-
-    if (compiled_classes_filename_ != nullptr && !boot_image_filename_.empty()) {
-      Usage("--compiled-classes should not be used with --boot-image");
-    }
-
-    if (compiled_classes_zip_filename_ != nullptr && compiled_classes_filename_ == nullptr) {
-      Usage("--compiled-classes-zip should be used with --compiled-classes");
-    }
-
     if (dex_filenames_.empty() && zip_fd_ == -1) {
       Usage("Input must be supplied with either --dex-file or --zip-fd");
     }
@@ -866,9 +857,7 @@ class Dex2Oat FINAL {
     }
 
     if (have_profile_file || have_profile_fd) {
-      if (compiled_classes_filename_ != nullptr ||
-          compiled_classes_zip_filename_ != nullptr ||
-          image_classes_filename_ != nullptr ||
+      if (image_classes_filename_ != nullptr ||
           image_classes_zip_filename_ != nullptr) {
         Usage("Profile based image creation is not supported with image or compiled classes");
       }
@@ -1203,10 +1192,6 @@ class Dex2Oat FINAL {
     AssignIfExists(args, M::Threads, &thread_count_);
     AssignIfExists(args, M::ImageClasses, &image_classes_filename_);
     AssignIfExists(args, M::ImageClassesZip, &image_classes_zip_filename_);
-    AssignIfExists(args, M::CompiledClasses, &compiled_classes_filename_);
-    AssignIfExists(args, M::CompiledClassesZip, &compiled_classes_zip_filename_);
-    AssignIfExists(args, M::CompiledMethods, &compiled_methods_filename_);
-    AssignIfExists(args, M::CompiledMethodsZip, &compiled_methods_zip_filename_);
     AssignIfExists(args, M::Passes, &passes_to_run_filename_);
     AssignIfExists(args, M::BootImage, &parser_options->boot_image_filename);
     AssignIfExists(args, M::AndroidRoot, &android_root_);
@@ -1257,11 +1242,31 @@ class Dex2Oat FINAL {
       ParseInstructionSetFeatures(*args.Get(M::TargetInstructionSetFeatures), parser_options.get());
     }
     if (args.Exists(M::ClassLoaderContext)) {
-      class_loader_context_ = ClassLoaderContext::Create(*args.Get(M::ClassLoaderContext));
+      std::string class_loader_context_arg = *args.Get(M::ClassLoaderContext);
+      class_loader_context_ = ClassLoaderContext::Create(class_loader_context_arg);
       if (class_loader_context_ == nullptr) {
         Usage("Option --class-loader-context has an incorrect format: %s",
-              args.Get(M::ClassLoaderContext)->c_str());
+              class_loader_context_arg.c_str());
       }
+      if (args.Exists(M::StoredClassLoaderContext)) {
+        const std::string stored_context_arg = *args.Get(M::StoredClassLoaderContext);
+        stored_class_loader_context_ = ClassLoaderContext::Create(stored_context_arg);
+        if (stored_class_loader_context_ == nullptr) {
+          Usage("Option --stored-class-loader-context has an incorrect format: %s",
+                stored_context_arg.c_str());
+        } else if (!class_loader_context_->VerifyClassLoaderContextMatch(
+            stored_context_arg,
+            /*verify_names*/ false,
+            /*verify_checksums*/ false)) {
+          Usage(
+              "Option --stored-class-loader-context '%s' mismatches --class-loader-context '%s'",
+              stored_context_arg.c_str(),
+              class_loader_context_arg.c_str());
+        }
+      }
+    } else if (args.Exists(M::StoredClassLoaderContext)) {
+      Usage("Option --stored-class-loader-context should only be used if "
+            "--class-loader-context is also specified");
     }
 
     if (!ReadCompilerOptions(args, compiler_options_.get(), &error_msg)) {
@@ -1479,9 +1484,15 @@ class Dex2Oat FINAL {
   }
 
   void LoadClassProfileDescriptors() {
-    if (profile_compilation_info_ != nullptr && IsImage()) {
-      Runtime* runtime = Runtime::Current();
-      CHECK(runtime != nullptr);
+    if (!IsImage()) {
+      return;
+    }
+    // If we don't have a profile, treat it as an empty set of classes. b/77340429
+    if (image_classes_ == nullptr) {
+      // May be non-null when --image-classes is passed in, in that case avoid clearing the list.
+      image_classes_.reset(new std::unordered_set<std::string>());
+    }
+    if (profile_compilation_info_ != nullptr) {
       // Filter out class path classes since we don't want to include these in the image.
       image_classes_.reset(
           new std::unordered_set<std::string>(
@@ -1501,8 +1512,7 @@ class Dex2Oat FINAL {
   dex2oat::ReturnCode Setup() {
     TimingLogger::ScopedTiming t("dex2oat Setup", timings_);
 
-    if (!PrepareImageClasses() || !PrepareCompiledClasses() || !PrepareCompiledMethods() ||
-        !PrepareDirtyObjects()) {
+    if (!PrepareImageClasses() || !PrepareDirtyObjects()) {
       return dex2oat::ReturnCode::kOther;
     }
 
@@ -1570,7 +1580,7 @@ class Dex2Oat FINAL {
 
       if (class_loader_context_ == nullptr) {
         // If no context was specified use the default one (which is an empty PathClassLoader).
-        class_loader_context_ = std::unique_ptr<ClassLoaderContext>(ClassLoaderContext::Default());
+        class_loader_context_ = ClassLoaderContext::Default();
       }
 
       DCHECK_EQ(oat_writers_.size(), 1u);
@@ -1596,8 +1606,12 @@ class Dex2Oat FINAL {
       }
 
       // Store the class loader context in the oat header.
-      key_value_store_->Put(OatHeader::kClassPathKey,
-                            class_loader_context_->EncodeContextForOatFile(classpath_dir_));
+      // TODO: deprecate this since store_class_loader_context should be enough to cover the users
+      // of classpath_dir as well.
+      std::string class_path_key =
+          class_loader_context_->EncodeContextForOatFile(classpath_dir_,
+                                                         stored_class_loader_context_.get());
+      key_value_store_->Put(OatHeader::kClassPathKey, class_path_key);
     }
 
     // Now that we have finalized key_value_store_, start writing the oat file.
@@ -1834,8 +1848,6 @@ class Dex2Oat FINAL {
                                      instruction_set_,
                                      instruction_set_features_.get(),
                                      image_classes_.release(),
-                                     compiled_classes_.release(),
-                                     compiled_methods_.release(),
                                      thread_count_,
                                      swap_fd_,
                                      profile_compilation_info_.get()));
@@ -2017,7 +2029,7 @@ class Dex2Oat FINAL {
 
       // We need to prepare method offsets in the image address space for direct method patching.
       TimingLogger::ScopedTiming t2("dex2oat Prepare image address space", timings_);
-      if (!image_writer_->PrepareImageAddressSpace()) {
+      if (!image_writer_->PrepareImageAddressSpace(timings_)) {
         LOG(ERROR) << "Failed to prepare image address space.";
         return false;
       }
@@ -2061,7 +2073,9 @@ class Dex2Oat FINAL {
 
     {
       TimingLogger::ScopedTiming t2("dex2oat Write ELF", timings_);
-      linker::MultiOatRelativePatcher patcher(instruction_set_, instruction_set_features_.get());
+      linker::MultiOatRelativePatcher patcher(instruction_set_,
+                                              instruction_set_features_.get(),
+                                              driver_->GetCompiledMethodStorage());
       for (size_t i = 0, size = oat_files_.size(); i != size; ++i) {
         std::unique_ptr<linker::ElfWriter>& elf_writer = elf_writers_[i];
         std::unique_ptr<linker::OatWriter>& oat_writer = oat_writers_[i];
@@ -2378,21 +2392,6 @@ class Dex2Oat FINAL {
     return true;
   }
 
-  bool PrepareCompiledClasses() {
-    // If --compiled-classes was specified, calculate the full list of classes to compile in the
-    // image.
-    if (compiled_classes_filename_ != nullptr) {
-      compiled_classes_ =
-          ReadClasses(compiled_classes_zip_filename_, compiled_classes_filename_, "compiled");
-      if (compiled_classes_ == nullptr) {
-        return false;
-      }
-    } else {
-      compiled_classes_.reset(nullptr);  // By default compile everything.
-    }
-    return true;
-  }
-
   static std::unique_ptr<std::unordered_set<std::string>> ReadClasses(const char* zip_filename,
                                                                       const char* classes_filename,
                                                                       const char* tag) {
@@ -2408,32 +2407,6 @@ class Dex2Oat FINAL {
                  << classes_filename << "': " << error_msg;
     }
     return classes;
-  }
-
-  bool PrepareCompiledMethods() {
-    // If --compiled-methods was specified, read the methods to compile from the given file(s).
-    if (compiled_methods_filename_ != nullptr) {
-      std::string error_msg;
-      if (compiled_methods_zip_filename_ != nullptr) {
-        compiled_methods_.reset(ReadCommentedInputFromZip<std::unordered_set<std::string>>(
-            compiled_methods_zip_filename_,
-            compiled_methods_filename_,
-            nullptr,            // No post-processing.
-            &error_msg));
-      } else {
-        compiled_methods_.reset(ReadCommentedInputFromFile<std::unordered_set<std::string>>(
-            compiled_methods_filename_,
-            nullptr));          // No post-processing.
-      }
-      if (compiled_methods_.get() == nullptr) {
-        LOG(ERROR) << "Failed to create list of compiled methods from '"
-            << compiled_methods_filename_ << "': " << error_msg;
-        return false;
-      }
-    } else {
-      compiled_methods_.reset(nullptr);  // By default compile everything.
-    }
-    return true;
   }
 
   bool PrepareDirtyObjects() {
@@ -2515,7 +2488,10 @@ class Dex2Oat FINAL {
                                                              compiler_options_.get(),
                                                              oat_file.get()));
       elf_writers_.back()->Start();
-      const bool do_oat_writer_layout = DoDexLayoutOptimizations() || DoOatLayoutOptimizations();
+      bool do_oat_writer_layout = DoDexLayoutOptimizations() || DoOatLayoutOptimizations();
+      if (profile_compilation_info_ != nullptr && profile_compilation_info_->IsEmpty()) {
+        do_oat_writer_layout = false;
+      }
       oat_writers_.emplace_back(new linker::OatWriter(
           IsBootImage(),
           timings_,
@@ -2841,6 +2817,9 @@ class Dex2Oat FINAL {
   // The spec describing how the class loader should be setup for compilation.
   std::unique_ptr<ClassLoaderContext> class_loader_context_;
 
+  // The class loader context stored in the oat file. May be equal to class_loader_context_.
+  std::unique_ptr<ClassLoaderContext> stored_class_loader_context_;
+
   size_t thread_count_;
   uint64_t start_ns_;
   uint64_t start_cputime_ns_;
@@ -2870,10 +2849,6 @@ class Dex2Oat FINAL {
   const char* image_classes_zip_filename_;
   const char* image_classes_filename_;
   ImageHeader::StorageMode image_storage_mode_;
-  const char* compiled_classes_zip_filename_;
-  const char* compiled_classes_filename_;
-  const char* compiled_methods_zip_filename_;
-  const char* compiled_methods_filename_;
   const char* passes_to_run_filename_;
   const char* dirty_image_objects_filename_;
   std::unique_ptr<std::unordered_set<std::string>> image_classes_;

@@ -34,6 +34,7 @@
 #include "art_field-inl.h"
 #include "art_method-inl.h"
 #include "base/bit_utils_iterator.h"
+#include "base/indenter.h"
 #include "base/os.h"
 #include "base/safe_map.h"
 #include "base/stl_util.h"
@@ -49,6 +50,7 @@
 #include "dex/dex_file-inl.h"
 #include "dex/dex_instruction-inl.h"
 #include "dex/string_reference.h"
+#include "dex/type_lookup_table.h"
 #include "disassembler.h"
 #include "gc/accounting/space_bitmap-inl.h"
 #include "gc/space/image_space.h"
@@ -56,7 +58,6 @@
 #include "gc/space/space-inl.h"
 #include "image-inl.h"
 #include "imtable-inl.h"
-#include "indenter.h"
 #include "subtype_check.h"
 #include "index_bss_mapping.h"
 #include "interpreter/unstarted_runtime.h"
@@ -75,7 +76,6 @@
 #include "stack.h"
 #include "stack_map.h"
 #include "thread_list.h"
-#include "type_lookup_table.h"
 #include "vdex_file.h"
 #include "verifier/method_verifier.h"
 #include "verifier/verifier_deps.h"
@@ -1180,6 +1180,17 @@ class OatDumper {
       }
     }
 
+    // Update header for shared section.
+    uint32_t shared_section_offset = 0u;
+    uint32_t shared_section_size = 0u;
+    if (dex_file->IsCompactDexFile()) {
+      CompactDexFile::Header* const header =
+          reinterpret_cast<CompactDexFile::Header*>(const_cast<uint8_t*>(dex_file->Begin()));
+      shared_section_offset = header->data_off_;
+      shared_section_size = header->data_size_;
+      // The shared section will be serialized right after the dex file.
+      header->data_off_ = header->file_size_;
+    }
     // Verify output directory exists
     if (!OS::DirectoryExists(options_.export_dex_location_)) {
       // TODO: Extend OS::DirectoryExists if symlink support is required
@@ -1226,14 +1237,20 @@ class OatDumper {
       return false;
     }
 
-    bool success = false;
-      success = file->WriteFully(dex_file->Begin(), fsize);
-    // }
-
+    bool success = file->WriteFully(dex_file->Begin(), fsize);
     if (!success) {
       os << "Failed to write dex file";
       file->Erase();
       return false;
+    }
+
+    if (shared_section_size != 0) {
+      success = file->WriteFully(dex_file->Begin() + shared_section_offset, shared_section_size);
+      if (!success) {
+        os << "Failed to write shared data section";
+        file->Erase();
+        return false;
+      }
     }
 
     if (file->FlushCloseOrErase() != 0) {
@@ -1697,7 +1714,10 @@ class OatDumper {
       CHECK(dex_cache != nullptr);
       ArtMethod* method = runtime->GetClassLinker()->ResolveMethodWithoutInvokeType(
           dex_method_idx, dex_cache, *options_.class_loader_);
-      CHECK(method != nullptr);
+      if (method == nullptr) {
+        soa.Self()->ClearException();
+        return nullptr;
+      }
       return verifier::MethodVerifier::VerifyMethodAndDump(
           soa.Self(), vios, dex_method_idx, dex_file, dex_cache, *options_.class_loader_,
           class_def, code_item, method, method_access_flags);

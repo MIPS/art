@@ -21,6 +21,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.concurrent.Semaphore;
 import java.util.Arrays;
 import java.util.Collection;
@@ -61,19 +62,23 @@ public class Main {
       while (continueBusyLoop) {
         inBusyLoop = true;
       }
-      int i = 0;
-      while (Main.isInterpreted() && i < 10000) {
-        Main.ensureJitCompiled(IntRunner.class, "run");
-        i++;
-      }
+      // Wait up to 300 seconds for OSR to kick in if we expect it. If we don't give up after only
+      // 3 seconds.
+      Instant osrDeadline = Instant.now().plusSeconds(expectOsr ? 600 : 3);
+      do {
+        // Don't actually do anything here.
+        inBusyLoop = true;
+      } while (hasJit() && !Main.isInOsrCode("run") && osrDeadline.compareTo(Instant.now()) > 0);
       // We shouldn't be doing OSR since we are using JVMTI and the set prevents OSR.
       // Set local will also push us to interpreter but the get local may remain in compiled code.
       if (hasJit()) {
         boolean inOsr = Main.isInOsrCode("run");
         if (expectOsr && !inOsr) {
-          throw new Error("Expected to be in OSR but was not.");
+          throw new Error(
+              "Expected to be in OSR but was not. interpreter: " + Main.isInterpreted());
         } else if (!expectOsr && inOsr) {
-          throw new Error("Expected not to be in OSR but was.");
+          throw new Error(
+              "Expected not to be in OSR but was. interpreter: " + Main.isInterpreted());
         }
       }
       reportValue(TARGET);
@@ -166,7 +171,6 @@ public class Main {
     throw new Error("Unable to find stack frame in method " + target + " on thread " + thr);
   }
 
-  public static native void ensureJitCompiled(Class k, String f);
   public static native boolean isInterpreted();
   public static native boolean isInOsrCode(String methodName);
   public static native boolean hasJit();

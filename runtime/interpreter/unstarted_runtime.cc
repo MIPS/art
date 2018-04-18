@@ -34,6 +34,7 @@
 #include "base/enums.h"
 #include "base/macros.h"
 #include "base/quasi_atomic.h"
+#include "base/zip_archive.h"
 #include "class_linker.h"
 #include "common_throws.h"
 #include "dex/descriptors_names.h"
@@ -56,7 +57,6 @@
 #include "thread-inl.h"
 #include "transaction.h"
 #include "well_known_classes.h"
-#include "zip_archive.h"
 
 namespace art {
 namespace interpreter {
@@ -181,11 +181,13 @@ static mirror::String* GetClassName(Thread* self, ShadowFrame* shadow_frame, siz
 template<typename T>
 static ALWAYS_INLINE bool ShouldBlockAccessToMember(T* member, ShadowFrame* frame)
     REQUIRES_SHARED(Locks::mutator_lock_) {
-  return hiddenapi::ShouldBlockAccessToMember(
+  // All uses in this file are from reflection
+  constexpr hiddenapi::AccessMethod access_method = hiddenapi::kReflection;
+  return hiddenapi::GetMemberAction(
       member,
       frame->GetMethod()->GetDeclaringClass()->GetClassLoader(),
       frame->GetMethod()->GetDeclaringClass()->GetDexCache(),
-      hiddenapi::kReflection);  // all uses in this file are from reflection
+      access_method) == hiddenapi::kDeny;
 }
 
 void UnstartedRuntime::UnstartedClassForNameCommon(Thread* self,
@@ -1538,7 +1540,7 @@ void UnstartedRuntime::UnstartedUnsafePutOrderedObject(
   }
   int64_t offset = shadow_frame->GetVRegLong(arg_offset + 2);
   mirror::Object* newValue = shadow_frame->GetVRegReference(arg_offset + 4);
-  QuasiAtomic::ThreadFenceRelease();
+  std::atomic_thread_fence(std::memory_order_release);
   if (Runtime::Current()->IsActiveTransaction()) {
     obj->SetFieldObject<true>(MemberOffset(offset), newValue);
   } else {
