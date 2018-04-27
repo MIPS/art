@@ -5008,6 +5008,7 @@ void InstructionCodeGeneratorMIPS::GenerateLongCompareAndBranch(IfCondition cond
   uint32_t imm_high = 0;
   uint32_t imm_low = 0;
   bool use_imm = rhs_location.IsConstant();
+  bool isR6 = codegen_->GetInstructionSetFeatures().IsR6();
   if (use_imm) {
     imm = rhs_location.GetConstant()->AsLongConstant()->GetValue();
     imm_high = High32Bits(imm);
@@ -5017,6 +5018,23 @@ void InstructionCodeGeneratorMIPS::GenerateLongCompareAndBranch(IfCondition cond
     rhs_low = rhs_location.AsRegisterPairLow<Register>();
   }
 
+  // Comparisons with zero are more efficient.
+  // <= -1 translates into < 0.
+  // > -1 translates into >= 0.
+  // < 1 translates into <= 0.
+  // >= 1 translates into > 0.
+  // Do the last two translations now.
+  // The first two translations will be done automatically by the
+  // more general code that handles other values of the immediate.
+  if (use_imm && imm == 1) {
+    if (cond == kCondLT) {
+      cond = kCondLE;
+      imm = imm_high = imm_low = 0;
+    } else if (cond == kCondGE) {
+      cond = kCondGT;
+      imm = imm_high = imm_low = 0;
+    }
+  }
   if (use_imm && imm == 0) {
     switch (cond) {
       case kCondEQ:
@@ -5052,58 +5070,157 @@ void InstructionCodeGeneratorMIPS::GenerateLongCompareAndBranch(IfCondition cond
         break;
     }
   } else if (use_imm) {
-    // TODO: more efficient comparison with constants without loading them into TMP/AT.
     switch (cond) {
       case kCondEQ:
-        __ LoadConst32(TMP, imm_high);
-        __ Xor(TMP, TMP, lhs_high);
-        __ LoadConst32(AT, imm_low);
-        __ Xor(AT, AT, lhs_low);
-        __ Or(TMP, TMP, AT);
-        __ Beqz(TMP, label);
+      case kCondNE: {
+        Register reg_high = TMP;
+        Register reg_low = AT;
+        if (IsUint<16>(imm_high)) {
+          if (imm_high == 0) {
+            reg_high = lhs_high;
+          } else {
+            __ Xori(TMP, lhs_high, imm_high);
+          }
+        } else {
+          __ Addiu32(TMP, lhs_high, -imm_high, TMP);
+        }
+        if (IsUint<16>(imm_low)) {
+          if (imm_low == 0) {
+            reg_low = lhs_low;
+          } else {
+            __ Xori(AT, lhs_low, imm_low);
+          }
+        } else {
+          __ Addiu32(AT, lhs_low, -imm_low, AT);
+        }
+        __ Or(TMP, reg_high, reg_low);
+        if (cond == kCondEQ) {
+          __ Beqz(TMP, label);
+        } else {
+          __ Bnez(TMP, label);
+        }
         break;
-      case kCondNE:
-        __ LoadConst32(TMP, imm_high);
-        __ Xor(TMP, TMP, lhs_high);
-        __ LoadConst32(AT, imm_low);
-        __ Xor(AT, AT, lhs_low);
-        __ Or(TMP, TMP, AT);
-        __ Bnez(TMP, label);
-        break;
-      case kCondLT:
-        __ LoadConst32(TMP, imm_high);
-        __ Blt(lhs_high, TMP, label);
-        __ Slt(TMP, TMP, lhs_high);
-        __ LoadConst32(AT, imm_low);
-        __ Sltu(AT, lhs_low, AT);
-        __ Blt(TMP, AT, label);
-        break;
-      case kCondGE:
-        __ LoadConst32(TMP, imm_high);
-        __ Blt(TMP, lhs_high, label);
-        __ Slt(TMP, lhs_high, TMP);
-        __ LoadConst32(AT, imm_low);
-        __ Sltu(AT, lhs_low, AT);
-        __ Or(TMP, TMP, AT);
-        __ Beqz(TMP, label);
-        break;
+      }
       case kCondLE:
-        __ LoadConst32(TMP, imm_high);
-        __ Blt(lhs_high, TMP, label);
-        __ Slt(TMP, TMP, lhs_high);
-        __ LoadConst32(AT, imm_low);
-        __ Sltu(AT, AT, lhs_low);
-        __ Or(TMP, TMP, AT);
-        __ Beqz(TMP, label);
+        // Handle lhs <= imm as lhs < imm + 1.
+        if (imm == std::numeric_limits<int64_t>::max()) {
+          __ B(label);
+          break;
+        }
+        imm++;
+        imm_high = High32Bits(imm);
+        imm_low = Low32Bits(imm);
+        FALLTHROUGH_INTENDED;
+      case kCondLT: {
+        int32_t imm_high_signed = static_cast<int32_t>(imm_high);
+        bool nonzero_imm_low = (imm_low != 0);
+        Register reg_eq = TMP;
+        // Check whether lhs_high < imm_high (signed compare).
+        if (imm_high == 0) {
+          __ Bltz(lhs_high, label);
+          // lhs_high == 0 when lhs_high == imm_high.
+          reg_eq = lhs_high;
+        } else if ((-0x7FFF <= imm_high_signed) && (imm_high_signed <= 0x7FFF)) {
+          __ Slti(AT, lhs_high, imm_high_signed);
+          if (isR6) {
+            __ Bnez(AT, label);
+            if (nonzero_imm_low) {
+              __ Addiu(TMP, lhs_high, -imm_high_signed);
+            }
+          } else {
+            if (nonzero_imm_low) {
+              __ Addiu(TMP, lhs_high, -imm_high_signed);  // Moves into delay slot.
+            }
+            __ Bnez(AT, label);
+          }
+          // TMP == 0 when lhs_high == imm_high.
+        } else {
+          __ LoadConst32(TMP, imm_high);
+          __ Blt(lhs_high, TMP, label);
+          if (nonzero_imm_low) {
+            __ Slt(TMP, TMP, lhs_high);
+          }
+          // TMP == 0 when lhs_high == imm_high.
+        }
+        // lhs_high >= imm_high. Check whether lhs_low < imm_low (unsigned compare).
+        if (nonzero_imm_low) {
+          int32_t imm_low_signed = static_cast<int32_t>(imm_low);
+          if (IsInt<16>(imm_low_signed)) {
+            __ Sltiu(AT, lhs_low, imm_low_signed);
+          } else {
+            __ LoadConst32(AT, imm_low);
+            __ Sltu(AT, lhs_low, AT);
+          }
+          // Branch if both of the following are true:
+          // - lhs_high == imm_high (reg_eq = 0)
+          // - lhs_low < imm_low (AT = 1)
+          __ Bltu(reg_eq, AT, label);
+        }
         break;
+      }
       case kCondGT:
-        __ LoadConst32(TMP, imm_high);
-        __ Blt(TMP, lhs_high, label);
-        __ Slt(TMP, lhs_high, TMP);
-        __ LoadConst32(AT, imm_low);
-        __ Sltu(AT, AT, lhs_low);
-        __ Blt(TMP, AT, label);
+        // Handle lhs > imm as lhs >= imm + 1.
+        if (imm == std::numeric_limits<int64_t>::max()) {
+          break;
+        }
+        imm++;
+        imm_high = High32Bits(imm);
+        imm_low = Low32Bits(imm);
+        FALLTHROUGH_INTENDED;
+      case kCondGE: {
+        int32_t imm_high_signed = static_cast<int32_t>(imm_high);
+        // If imm_low = 0, checking whether lhs_high >= imm_high (signed compare) is sufficient
+        // (because lhs_low >= imm_low (unsigned compare)).
+        if (imm_low == 0) {
+          if (imm_high == 0) {
+            __ Bgez(lhs_high, label);
+          } else if (IsInt<16>(imm_high_signed)) {
+            __ Slti(TMP, lhs_high, imm_high_signed);
+            __ Beqz(TMP, label);
+          } else {
+            __ LoadConst32(TMP, imm_high);
+            __ Bge(lhs_high, TMP, label);
+          }
+        } else {
+          Register reg_eq = TMP;
+          // Check whether lhs_high > imm_high (signed compare).
+          if (imm_high == 0) {
+            __ Bgtz(lhs_high, label);
+            // lhs_high == 0 when lhs_high == imm_high.
+            reg_eq = lhs_high;
+          } else if ((-0x7FFF <= imm_high_signed) && (imm_high_signed < 0x7FFF)) {
+            // Simulate lhs_high > imm_high via !(lhs_high < imm_high + 1).
+            __ Slti(AT, lhs_high, imm_high_signed + 1);
+            if (isR6) {
+              __ Beqz(AT, label);
+              __ Addiu(TMP, lhs_high, -imm_high_signed);
+            } else {
+              __ Addiu(TMP, lhs_high, -imm_high_signed);  // Moves into delay slot.
+              __ Beqz(AT, label);
+            }
+            // TMP == 0 when lhs_high == imm_high.
+          } else {
+            __ LoadConst32(TMP, imm_high);
+            __ Blt(TMP, lhs_high, label);
+            __ Slt(TMP, lhs_high, TMP);
+            // TMP == 0 when lhs_high == imm_high.
+          }
+          // lhs_high <= imm_high. Check whether lhs_low >= imm_low (unsigned compare).
+          int32_t imm_low_signed = static_cast<int32_t>(imm_low);
+          if (IsInt<16>(imm_low_signed)) {
+            __ Sltiu(AT, lhs_low, imm_low_signed);
+          } else {
+            __ LoadConst32(AT, imm_low);
+            __ Sltu(AT, lhs_low, AT);
+          }
+          // Branch if both of the following are true:
+          // - lhs_high == imm_high (reg_eq = 0)
+          // - lhs_low >= imm_low (AT = 0)
+          __ Or(TMP, reg_eq, AT);
+          __ Beqz(TMP, label);
+        }
         break;
+      }
       case kCondB:
         __ LoadConst32(TMP, imm_high);
         __ Bltu(lhs_high, TMP, label);
