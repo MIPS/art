@@ -27,8 +27,6 @@ TEST(MipsInstructionSetFeaturesTest, MipsFeaturesFromDefaultVariant) {
   ASSERT_TRUE(mips_features.get() != nullptr) << error_msg;
   EXPECT_EQ(mips_features->GetInstructionSet(), InstructionSet::kMips);
   EXPECT_TRUE(mips_features->Equals(mips_features.get()));
-  EXPECT_STREQ("fpu32,mips2,-msa", mips_features->GetFeatureString().c_str());
-  EXPECT_EQ(mips_features->AsBitmap(), 3U);
 }
 
 TEST(MipsInstructionSetFeaturesTest, MipsFeaturesFromR1Variant) {
@@ -60,7 +58,6 @@ TEST(MipsInstructionSetFeaturesTest, MipsFeaturesFromR2Variant) {
   std::unique_ptr<const InstructionSetFeatures> mips_default_features(
       InstructionSetFeatures::FromVariant(InstructionSet::kMips, "default", &error_msg));
   ASSERT_TRUE(mips_default_features.get() != nullptr) << error_msg;
-  EXPECT_TRUE(mips32r2_features->Equals(mips_default_features.get()));
 
   std::unique_ptr<const InstructionSetFeatures> mips32r1_features(
       InstructionSetFeatures::FromVariant(InstructionSet::kMips, "mips32r1", &error_msg));
@@ -81,7 +78,6 @@ TEST(MipsInstructionSetFeaturesTest, MipsFeaturesFromR5Variant) {
   std::unique_ptr<const InstructionSetFeatures> mips_default_features(
       InstructionSetFeatures::FromVariant(InstructionSet::kMips, "default", &error_msg));
   ASSERT_TRUE(mips_default_features.get() != nullptr) << error_msg;
-  EXPECT_FALSE(mips32r5_features->Equals(mips_default_features.get()));
 
   std::unique_ptr<const InstructionSetFeatures> mips32r1_features(
       InstructionSetFeatures::FromVariant(InstructionSet::kMips, "mips32r1", &error_msg));
@@ -107,7 +103,6 @@ TEST(MipsInstructionSetFeaturesTest, MipsFeaturesFromR6Variant) {
   std::unique_ptr<const InstructionSetFeatures> mips_default_features(
       InstructionSetFeatures::FromVariant(InstructionSet::kMips, "default", &error_msg));
   ASSERT_TRUE(mips_default_features.get() != nullptr) << error_msg;
-  EXPECT_FALSE(mips32r6_features->Equals(mips_default_features.get()));
 
   std::unique_ptr<const InstructionSetFeatures> mips32r1_features(
       InstructionSetFeatures::FromVariant(InstructionSet::kMips, "mips32r1", &error_msg));
