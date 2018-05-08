@@ -37,6 +37,7 @@ art_cc_binary {
         "libart-compiler",
         "libart-disassembler",
         "libdexfile",
+        "libprofile",
         "libbase",
     ],
 }
@@ -52,6 +53,7 @@ art_cc_binary {
         "libartd-compiler",
         "libartd-disassembler",
         "libdexfiled",
+        "libprofiled",
         "libbase",
     ],
 }
@@ -77,6 +79,7 @@ art_cc_binary {
     static_libs: [
         "libart",
         "libdexfile",
+        "libprofile",
         "libart-compiler",
         "libart-disassembler",
         "libvixl-arm",
@@ -96,6 +99,9 @@ art_cc_binary {
         darwin: {
             enabled: false,
         },
+        linux_glibc_x86_64: {
+            use_clang_lld: true,
+        },
     },
     ldflags: [
         // We need this because GC stress mode makes use of
@@ -108,6 +114,7 @@ art_cc_binary {
     static_libs: [
         "libartd",
         "libdexfiled",
+        "libprofiled",
         "libartd-compiler",
         "libartd-disassembler",
         "libvixld-arm",

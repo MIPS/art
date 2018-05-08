@@ -34,17 +34,23 @@ art_cc_defaults {
 
 art_cc_library {
     name: "libart-dexlayout",
-    defaults: ["libart-dexlayout-defaults"],
+    defaults: [
+        "libart-dexlayout-defaults",
+        "dex2oat-pgo-defaults",
+    ],
     shared_libs: [
         "libart",
         "libdexfile",
+        "libprofile",
     ],
 
-    pgo: {
-        instrumentation: true,
-        profile_file: "art/dex2oat.profdata",
-        benchmarks: ["dex2oat"],
-    }
+    target: {
+        android: {
+            lto: {
+                 thin: true,
+            },
+        },
+    },
 }
 
 art_cc_library {
@@ -56,6 +62,7 @@ art_cc_library {
     shared_libs: [
         "libartd",
         "libdexfiled",
+        "libprofiled",
     ],
 }
 
@@ -73,6 +80,7 @@ art_cc_binary {
     name: "dexlayout",
     defaults: ["dexlayout-defaults"],
     shared_libs: [
+        "libprofile",
         "libart",
         "libart-dexlayout",
     ],
@@ -85,6 +93,7 @@ art_cc_binary {
         "dexlayout-defaults",
     ],
     shared_libs: [
+        "libprofiled",
         "libartd",
         "libartd-dexlayout",
     ],
@@ -93,7 +102,10 @@ art_cc_binary {
 art_cc_test {
     name: "art_dexlayout_tests",
     defaults: ["art_gtest_defaults"],
-    shared_libs: ["libart-dexlayout"],
+    shared_libs: [
+        "libprofiled",
+        "libartd-dexlayout",
+    ],
     srcs: ["dexlayout_test.cc"],
 }
 

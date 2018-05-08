@@ -254,10 +254,6 @@
         "variant": "jit"
     },
     {
-        "tests": ["904-object-allocation"],
-        "variant": "jit"
-    },
-    {
         "tests": ["570-checker-select",
                   "484-checker-register-hints"],
         "description": ["These tests were based on the linear scan allocator,",
@@ -416,10 +412,11 @@
             ".*methodhandle.*",
             ".*method-handle.*",
             ".*varhandle.*",
-            ".*var-handle.*"
+            ".*var-handle.*",
+            "716-jli-jit-samples"
         ],
         "description": [
-            "Tests that use invoke-polymorphic/invoke-custom which is not yet supported by",
+            "Tests for bytecodes introduced after DEX version 037 that are unsupported by",
             "dexter/slicer."
         ],
         "bug": "b/37272822",
@@ -887,6 +884,7 @@
           "706-checker-scheduler",
           "707-checker-invalid-profile",
           "714-invoke-custom-lambda-metafactory",
+          "716-jli-jit-samples",
           "800-smali",
           "801-VoidCheckCast",
           "802-deoptimization",

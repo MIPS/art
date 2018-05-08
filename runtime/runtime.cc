@@ -232,7 +232,6 @@ Runtime::Runtime()
       intern_table_(nullptr),
       class_linker_(nullptr),
       signal_catcher_(nullptr),
-      use_tombstoned_traces_(false),
       java_vm_(nullptr),
       fault_message_lock_("Fault message lock"),
       fault_message_(""),
@@ -904,7 +903,7 @@ void Runtime::InitNonZygoteOrPostFork(
 
 void Runtime::StartSignalCatcher() {
   if (!is_zygote_) {
-    signal_catcher_ = new SignalCatcher(stack_trace_file_, use_tombstoned_traces_);
+    signal_catcher_ = new SignalCatcher();
   }
 }
 
@@ -1002,7 +1001,8 @@ static bool OpenDexFilesFromImage(const std::string& image_location,
       return false;
     }
     std::unique_ptr<const OatFile> oat_file(
-        OatFile::OpenWithElfFile(elf_file.release(),
+        OatFile::OpenWithElfFile(/* zip_fd */ -1,
+                                 elf_file.release(),
                                  vdex_file.release(),
                                  oat_location,
                                  nullptr,
@@ -1151,12 +1151,6 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
   abort_ = runtime_options.GetOrDefault(Opt::HookAbort);
 
   default_stack_size_ = runtime_options.GetOrDefault(Opt::StackSize);
-  use_tombstoned_traces_ = runtime_options.GetOrDefault(Opt::UseTombstonedTraces);
-#if !defined(ART_TARGET_ANDROID)
-  CHECK(!use_tombstoned_traces_)
-      << "-Xusetombstonedtraces is only supported in an Android environment";
-#endif
-  stack_trace_file_ = runtime_options.ReleaseOrDefault(Opt::StackTraceFile);
 
   compiler_executable_ = runtime_options.ReleaseOrDefault(Opt::Compiler);
   compiler_options_ = runtime_options.ReleaseOrDefault(Opt::CompilerOptions);
@@ -1619,7 +1613,6 @@ bool Runtime::Init(RuntimeArgumentMap&& runtime_options_in) {
 }
 
 static bool EnsureJvmtiPlugin(Runtime* runtime,
-                              bool allow_non_debuggable_tooling,
                               std::vector<Plugin>* plugins,
                               std::string* error_msg) {
   constexpr const char* plugin_name = kIsDebugBuild ? "libopenjdkjvmtid.so" : "libopenjdkjvmti.so";
@@ -1631,10 +1624,13 @@ static bool EnsureJvmtiPlugin(Runtime* runtime,
     }
   }
 
+  // TODO Rename Dbg::IsJdwpAllowed is IsDebuggingAllowed.
+  DCHECK(Dbg::IsJdwpAllowed() || !runtime->IsJavaDebuggable())
+      << "Being debuggable requires that jdwp (i.e. debugging) is allowed.";
   // Is the process debuggable? Otherwise, do not attempt to load the plugin unless we are
   // specifically allowed.
-  if (!allow_non_debuggable_tooling && !runtime->IsJavaDebuggable()) {
-    *error_msg = "Process is not debuggable.";
+  if (!Dbg::IsJdwpAllowed()) {
+    *error_msg = "Process is not allowed to load openjdkjvmti plugin. Process must be debuggable";
     return false;
   }
 
@@ -1654,12 +1650,9 @@ static bool EnsureJvmtiPlugin(Runtime* runtime,
 //   revisit this and make sure we're doing this on the right thread
 //   (and we synchronize access to any shared data structures like "agents_")
 //
-void Runtime::AttachAgent(JNIEnv* env,
-                          const std::string& agent_arg,
-                          jobject class_loader,
-                          bool allow_non_debuggable_tooling) {
+void Runtime::AttachAgent(JNIEnv* env, const std::string& agent_arg, jobject class_loader) {
   std::string error_msg;
-  if (!EnsureJvmtiPlugin(this, allow_non_debuggable_tooling, &plugins_, &error_msg)) {
+  if (!EnsureJvmtiPlugin(this, &plugins_, &error_msg)) {
     LOG(WARNING) << "Could not load plugin: " << error_msg;
     ScopedObjectAccess soa(Thread::Current());
     ThrowIOException("%s", error_msg.c_str());

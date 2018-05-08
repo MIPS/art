@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-public class Main {
-  public static void main(String[] args) {
-    ByteSimdMinMax.main();
-    CharSimdMinMax.main();
-    ShortSimdMinMax.main();
-    IntSimdMinMax.main();
-    LongSimdMinMax.main();
-    DoubleSimdMinMax.main();
-    FloatSimdMinMax.main();
-  }
+#include "debugger.h"
+
+namespace art {
+namespace Test909AttachAgent {
+
+extern "C" JNIEXPORT void JNICALL Java_Main_setDebuggingAllowed(JNIEnv*, jclass, jboolean val) {
+  Dbg::SetJdwpAllowed(val);
 }
+
+}  // namespace Test909AttachAgent
+}  // namespace art

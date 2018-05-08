@@ -33,7 +33,6 @@
 
 #include "base/dumpable.h"
 #include "base/logging.h"  // For InitLogging.
-#include "base/mutex.h"
 #include "base/scoped_flock.h"
 #include "base/stringpiece.h"
 #include "base/time_utils.h"
@@ -48,7 +47,7 @@
 #include "dex/dex_file_loader.h"
 #include "dex/dex_file_types.h"
 #include "dex/type_reference.h"
-#include "jit/profile_compilation_info.h"
+#include "profile/profile_compilation_info.h"
 #include "profile_assistant.h"
 #include "runtime.h"
 
@@ -187,7 +186,6 @@ class ProfMan FINAL {
       dump_only_(false),
       dump_classes_and_methods_(false),
       generate_boot_image_profile_(false),
-      skip_apk_verification_(false),
       dump_output_to_fd_(kInvalidFd),
       test_profile_num_dex_(kDefaultTestProfileNumDex),
       test_profile_method_percerntage_(kDefaultTestProfileMethodPercentage),
@@ -231,8 +229,6 @@ class ProfMan FINAL {
         ParseUintOption(option, "--dump-output-to-fd", &dump_output_to_fd_, Usage);
       } else if (option == "--generate-boot-image-profile") {
         generate_boot_image_profile_ = true;
-      } else if (option == "--skip-apk-verification") {
-        skip_apk_verification_ = true;
       } else if (option.starts_with("--boot-image-class-threshold=")) {
         ParseUintOption(option,
                         "--boot-image-class-threshold",
@@ -369,10 +365,6 @@ class ProfMan FINAL {
     return result;
   }
 
-  bool ShouldSkipApkVerification() const {
-    return skip_apk_verification_;
-  }
-
   bool GetProfileFilterKeyFromApks(std::set<ProfileFilterKey>* profile_filter_keys) {
     auto process_fn = [profile_filter_keys](std::unique_ptr<const DexFile>&& dex_file) {
       // Store the profile key of the location instead of the location itself.
@@ -424,10 +416,11 @@ class ProfMan FINAL {
       std::string error_msg;
       const ArtDexFileLoader dex_file_loader;
       std::vector<std::unique_ptr<const DexFile>> dex_files_for_location;
+      // We do not need to verify the apk for processing profiles.
       if (use_apk_fd_list) {
         if (dex_file_loader.OpenZip(apks_fd_[i],
                                     dex_locations_[i],
-                                    /* verify */ !ShouldSkipApkVerification(),
+                                    /* verify */ false,
                                     kVerifyChecksum,
                                     &error_msg,
                                     &dex_files_for_location)) {
@@ -438,7 +431,7 @@ class ProfMan FINAL {
       } else {
         if (dex_file_loader.Open(apk_files_[i].c_str(),
                                  dex_locations_[i],
-                                 /* verify */ !ShouldSkipApkVerification(),
+                                 /* verify */ false,
                                  kVerifyChecksum,
                                  &error_msg,
                                  &dex_files_for_location)) {
@@ -841,7 +834,8 @@ class ProfMan FINAL {
 
     bool found_invoke = false;
     for (const DexInstructionPcPair& inst : CodeItemInstructionAccessor(*dex_file, code_item)) {
-      if (inst->Opcode() == Instruction::INVOKE_VIRTUAL) {
+      if (inst->Opcode() == Instruction::INVOKE_VIRTUAL ||
+          inst->Opcode() == Instruction::INVOKE_VIRTUAL_RANGE) {
         if (found_invoke) {
           LOG(ERROR) << "Multiple invoke INVOKE_VIRTUAL found: "
                      << dex_file->PrettyMethod(method_index);
@@ -1260,7 +1254,6 @@ class ProfMan FINAL {
   bool dump_only_;
   bool dump_classes_and_methods_;
   bool generate_boot_image_profile_;
-  bool skip_apk_verification_;
   int dump_output_to_fd_;
   BootImageOptions boot_image_options_;
   std::string test_profile_;
@@ -1314,4 +1307,3 @@ static int profman(int argc, char** argv) {
 int main(int argc, char **argv) {
   return art::profman(argc, argv);
 }
-

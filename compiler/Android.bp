@@ -210,7 +210,10 @@ gensrcs {
 
 art_cc_library {
     name: "libart-compiler",
-    defaults: ["libart-compiler-defaults"],
+    defaults: [
+        "libart-compiler-defaults",
+        "dex2oat-pgo-defaults",
+    ],
     codegen: {
         arm: {
             // VIXL assembly support for ARM targets.
@@ -241,14 +244,17 @@ art_cc_library {
     },
     shared_libs: [
         "libart",
+        "libprofile",
         "libdexfile",
     ],
 
-    pgo: {
-        instrumentation: true,
-        profile_file: "art/dex2oat.profdata",
-        benchmarks: ["dex2oat"],
-    }
+    target: {
+        android: {
+            lto: {
+                 thin: true,
+            },
+        },
+    },
 }
 
 art_cc_library {
@@ -287,6 +293,7 @@ art_cc_library {
     },
     shared_libs: [
         "libartd",
+        "libprofiled",
         "libdexfiled",
     ],
 }
@@ -403,6 +410,7 @@ art_cc_test {
     ],
 
     shared_libs: [
+        "libprofiled",
         "libartd-compiler",
         "libartd-simulator-container",
         "libvixld-arm",

@@ -710,10 +710,7 @@ class Runtime {
   void AddSystemWeakHolder(gc::AbstractSystemWeakHolder* holder);
   void RemoveSystemWeakHolder(gc::AbstractSystemWeakHolder* holder);
 
-  void AttachAgent(JNIEnv* env,
-                   const std::string& agent_arg,
-                   jobject class_loader,
-                   bool allow_non_debuggable_tooling = false);
+  void AttachAgent(JNIEnv* env, const std::string& agent_arg, jobject class_loader);
 
   const std::list<std::unique_ptr<ti::Agent>>& GetAgents() const {
     return agents_;
@@ -873,14 +870,6 @@ class Runtime {
   ClassLinker* class_linker_;
 
   SignalCatcher* signal_catcher_;
-
-  // If true, the runtime will connect to tombstoned via a socket to
-  // request an open file descriptor to write its traces to.
-  bool use_tombstoned_traces_;
-
-  // Location to which traces must be written on SIGQUIT. Only used if
-  // tombstoned_traces_ == false.
-  std::string stack_trace_file_;
 
   std::unique_ptr<JavaVMExt> java_vm_;
 

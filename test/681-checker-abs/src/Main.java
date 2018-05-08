@@ -19,6 +19,10 @@
  */
 public class Main {
 
+  //
+  // Intrinsics.
+  //
+
   /// CHECK-START: int Main.absI(int) instruction_simplifier (before)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> InvokeStaticOrDirect [<<Par>>] intrinsic:MathAbsInt
@@ -51,7 +55,11 @@ public class Main {
     return Math.abs(a);
   }
 
-  /// CHECK-START: int Main.abs1(int) instruction_simplifier$after_inlining (before)
+  //
+  // Types.
+  //
+
+  /// CHECK-START: int Main.abs1(int) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> GreaterThanOrEqual [<<Par>>,<<Zer>>]
@@ -59,18 +67,18 @@ public class Main {
   /// CHECK-DAG: <<Sel:i\d+>> Select [<<Neg>>,<<Par>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: int Main.abs1(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs1(int) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.abs1(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs1(int) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static int abs1(int a) {
     return a < 0 ? -a : a;
   }
 
-  /// CHECK-START: int Main.abs2(int) instruction_simplifier$after_inlining (before)
+  /// CHECK-START: int Main.abs2(int) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> GreaterThan [<<Par>>,<<Zer>>]
@@ -78,18 +86,18 @@ public class Main {
   /// CHECK-DAG: <<Sel:i\d+>> Select [<<Neg>>,<<Par>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: int Main.abs2(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs2(int) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.abs2(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs2(int) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static int abs2(int a) {
     return a <= 0 ? -a : a;
   }
 
-  /// CHECK-START: int Main.abs3(int) instruction_simplifier$after_inlining (before)
+  /// CHECK-START: int Main.abs3(int) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> LessThanOrEqual [<<Par>>,<<Zer>>]
@@ -97,18 +105,18 @@ public class Main {
   /// CHECK-DAG: <<Sel:i\d+>> Select [<<Par>>,<<Neg>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: int Main.abs3(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs3(int) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.abs3(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs3(int) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static int abs3(int a) {
     return a > 0 ? a : -a;
   }
 
-  /// CHECK-START: int Main.abs4(int) instruction_simplifier$after_inlining (before)
+  /// CHECK-START: int Main.abs4(int) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> LessThan [<<Par>>,<<Zer>>]
@@ -116,18 +124,18 @@ public class Main {
   /// CHECK-DAG: <<Sel:i\d+>> Select [<<Par>>,<<Neg>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: int Main.abs4(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs4(int) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:i\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.abs4(int) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs4(int) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static int abs4(int a) {
     return a >= 0 ? a : -a;
   }
 
-  /// CHECK-START: int Main.abs5(short) instruction_simplifier$after_inlining (before)
+  /// CHECK-START: int Main.abs5(short) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:s\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> LessThan [<<Par>>,<<Zer>>]
@@ -135,18 +143,18 @@ public class Main {
   /// CHECK-DAG: <<Sel:i\d+>> Select [<<Par>>,<<Neg>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: int Main.abs5(short) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs5(short) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:s\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.abs5(short) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs5(short) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static int abs5(short a) {
     return a >= 0 ? a : -a;
   }
 
-  /// CHECK-START: int Main.abs6(byte) instruction_simplifier$after_inlining (before)
+  /// CHECK-START: int Main.abs6(byte) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:b\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> LessThan [<<Par>>,<<Zer>>]
@@ -154,18 +162,18 @@ public class Main {
   /// CHECK-DAG: <<Sel:i\d+>> Select [<<Par>>,<<Neg>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: int Main.abs6(byte) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs6(byte) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:b\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.abs6(byte) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.abs6(byte) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static int abs6(byte a) {
     return a >= 0 ? a : -a;
   }
 
-  /// CHECK-START: long Main.abs7(long) instruction_simplifier$after_inlining (before)
+  /// CHECK-START: long Main.abs7(long) instruction_simplifier$after_gvn (before)
   /// CHECK-DAG: <<Par:j\d+>> ParameterValue
   /// CHECK-DAG: <<Zer:j\d+>> LongConstant 0
   /// CHECK-DAG: <<Cnd:z\d+>> LessThan [<<Par>>,<<Zer>>]
@@ -173,15 +181,38 @@ public class Main {
   /// CHECK-DAG: <<Sel:j\d+>> Select [<<Par>>,<<Neg>>,<<Cnd>>]
   /// CHECK-DAG:              Return [<<Sel>>]
   //
-  /// CHECK-START: long Main.abs7(long) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: long Main.abs7(long) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:j\d+>> ParameterValue
   /// CHECK-DAG: <<Abs:j\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: long Main.abs7(long) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: long Main.abs7(long) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              Select
   public static long abs7(long a) {
     return a >= 0 ? a : -a;
+  }
+
+  //
+  // Complications.
+  //
+
+  /// CHECK-START: int Main.abs0(int[]) instruction_simplifier$after_gvn (before)
+  /// CHECK-DAG: <<Zer:i\d+>> IntConstant 0
+  /// CHECK-DAG: <<Arr:i\d+>> ArrayGet [{{l\d+}},{{i\d+}}]
+  /// CHECK-DAG: <<Cnd:z\d+>> LessThan [<<Arr>>,<<Zer>>]
+  /// CHECK-DAG: <<Neg:i\d+>> [<<Arr>>]
+  /// CHECK-DAG: <<Sel:i\d+>> Select [<<Arr>>,<<Neg>>,<<Cnd>>]
+  /// CHECK-DAG:              Return [<<Sel>>]
+  //
+  /// CHECK-START: int Main.abs0(int[]) instruction_simplifier$after_gvn (after)
+  /// CHECK-DAG: <<Arr:i\d+>> ArrayGet [{{l\d+}},{{i\d+}}]
+  /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Arr>>]
+  /// CHECK-DAG:              Return [<<Abs>>]
+  //
+  /// CHECK-START: int Main.abs0(int[]) instruction_simplifier$after_gvn (after)
+  /// CHECK-NOT:              Select
+  public static int abs0(int[] a) {
+    return a[0] >= 0 ? a[0] : -a[0];
   }
 
   //
@@ -236,11 +267,11 @@ public class Main {
   /// CHECK-DAG: <<Abs:i\d+>> Abs [<<Par>>]
   /// CHECK-DAG:              Return [<<Abs>>]
   //
-  /// CHECK-START: int Main.zabs3(char) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.zabs3(char) instruction_simplifier$after_gvn (after)
   /// CHECK-DAG: <<Par:c\d+>> ParameterValue
   /// CHECK-DAG:              Return [<<Par>>]
   //
-  /// CHECK-START: int Main.zabs3(char) instruction_simplifier$after_inlining (after)
+  /// CHECK-START: int Main.zabs3(char) instruction_simplifier$after_gvn (after)
   /// CHECK-NOT:              InvokeStaticOrDirect
   /// CHECK-NOT:              Abs
   public static int zabs3(char a) {
@@ -248,10 +279,12 @@ public class Main {
   }
 
   public static void main(String[] args) {
+    // Intrinsics.
     expectEquals(10, absI(-10));
     expectEquals(20, absI(20));
     expectEquals(10L, absL(-10L));
     expectEquals(20L, absL(20L));
+    // Types.
     expectEquals(10, abs1(-10));
     expectEquals(20, abs1(20));
     expectEquals(10, abs2(-10));
@@ -266,6 +299,12 @@ public class Main {
     expectEquals(20, abs6((byte) 20));
     expectEquals(10L, abs7(-10L));
     expectEquals(20L, abs7(20L));
+    // Complications.
+    int[] a = { 13 };
+    int[] b = { -11 };
+    expectEquals(13, abs0(a));
+    expectEquals(11, abs0(b));
+    // Nop zero extension.
     expectEquals(1, zabs1((byte) 1));
     expectEquals(0xff, zabs1((byte) -1));
     expectEquals(1, zabs2((short) 1));

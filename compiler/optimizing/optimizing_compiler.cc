@@ -107,6 +107,7 @@ class PassObserver : public ValueObject {
                CompilerDriver* compiler_driver,
                Mutex& dump_mutex)
       : graph_(graph),
+        last_seen_graph_size_(0),
         cached_method_name_(),
         timing_logger_enabled_(compiler_driver->GetCompilerOptions().GetDumpTimings()),
         timing_logger_(timing_logger_enabled_ ? GetMethodName() : "", true, true),
@@ -174,7 +175,7 @@ class PassObserver : public ValueObject {
     visualizer_oss_.clear();
   }
 
-  void EndPass(const char* pass_name) REQUIRES(!visualizer_dump_mutex_) {
+  void EndPass(const char* pass_name, bool pass_change) REQUIRES(!visualizer_dump_mutex_) {
     // Pause timer first, then dump graph.
     if (timing_logger_enabled_) {
       timing_logger_.EndTiming();
@@ -188,7 +189,7 @@ class PassObserver : public ValueObject {
     if (kIsDebugBuild) {
       if (!graph_in_bad_state_) {
         GraphChecker checker(graph_);
-        checker.Run();
+        last_seen_graph_size_ = checker.Run(pass_change, last_seen_graph_size_);
         if (!checker.IsValid()) {
           LOG(FATAL) << "Error after " << pass_name << ": " << Dumpable<GraphChecker>(checker);
         }
@@ -214,6 +215,7 @@ class PassObserver : public ValueObject {
   }
 
   HGraph* const graph_;
+  size_t last_seen_graph_size_;
 
   std::string cached_method_name_;
 
@@ -241,16 +243,22 @@ class PassScope : public ValueObject {
  public:
   PassScope(const char *pass_name, PassObserver* pass_observer)
       : pass_name_(pass_name),
+        pass_change_(true),  // assume change
         pass_observer_(pass_observer) {
     pass_observer_->StartPass(pass_name_);
   }
 
+  void SetPassNotChanged() {
+    pass_change_ = false;
+  }
+
   ~PassScope() {
-    pass_observer_->EndPass(pass_name_);
+    pass_observer_->EndPass(pass_name_, pass_change_);
   }
 
  private:
   const char* const pass_name_;
+  bool pass_change_;
   PassObserver* const pass_observer_;
 };
 
@@ -294,7 +302,7 @@ class OptimizingCompiler FINAL : public Compiler {
       REQUIRES_SHARED(Locks::mutator_lock_);
 
  private:
-  void RunOptimizations(HGraph* graph,
+  bool RunOptimizations(HGraph* graph,
                         CodeGenerator* codegen,
                         const DexCompilationUnit& dex_compilation_unit,
                         PassObserver* pass_observer,
@@ -313,21 +321,38 @@ class OptimizingCompiler FINAL : public Compiler {
         dex_compilation_unit,
         handles);
     DCHECK_EQ(length, optimizations.size());
-    // Run the optimization passes one by one.
+    // Run the optimization passes one by one. Any "depends_on" pass refers back to
+    // the most recent occurrence of that pass, skipped or executed.
+    std::bitset<static_cast<size_t>(OptimizationPass::kLast) + 1u> pass_changes;
+    pass_changes[static_cast<size_t>(OptimizationPass::kNone)] = true;
+    bool change = false;
     for (size_t i = 0; i < length; ++i) {
-      PassScope scope(optimizations[i]->GetPassName(), pass_observer);
-      optimizations[i]->Run();
+      if (pass_changes[static_cast<size_t>(definitions[i].depends_on)]) {
+        // Execute the pass and record whether it changed anything.
+        PassScope scope(optimizations[i]->GetPassName(), pass_observer);
+        bool pass_change = optimizations[i]->Run();
+        pass_changes[static_cast<size_t>(definitions[i].pass)] = pass_change;
+        if (pass_change) {
+          change = true;
+        } else {
+          scope.SetPassNotChanged();
+        }
+      } else {
+        // Skip the pass and record that nothing changed.
+        pass_changes[static_cast<size_t>(definitions[i].pass)] = false;
+      }
     }
+    return change;
   }
 
-  template <size_t length> void RunOptimizations(
+  template <size_t length> bool RunOptimizations(
       HGraph* graph,
       CodeGenerator* codegen,
       const DexCompilationUnit& dex_compilation_unit,
       PassObserver* pass_observer,
       VariableSizedHandleScope* handles,
       const OptimizationDef (&definitions)[length]) const {
-    RunOptimizations(
+    return RunOptimizations(
         graph, codegen, dex_compilation_unit, pass_observer, handles, definitions, length);
   }
 
@@ -366,13 +391,7 @@ class OptimizingCompiler FINAL : public Compiler {
                                      ArtMethod* method,
                                      VariableSizedHandleScope* handles) const;
 
-  void MaybeRunInliner(HGraph* graph,
-                       CodeGenerator* codegen,
-                       const DexCompilationUnit& dex_compilation_unit,
-                       PassObserver* pass_observer,
-                       VariableSizedHandleScope* handles) const;
-
-  void RunArchOptimizations(HGraph* graph,
+  bool RunArchOptimizations(HGraph* graph,
                             CodeGenerator* codegen,
                             const DexCompilationUnit& dex_compilation_unit,
                             PassObserver* pass_observer,
@@ -435,28 +454,7 @@ static bool IsInstructionSetSupported(InstructionSet instruction_set) {
       || instruction_set == InstructionSet::kX86_64;
 }
 
-void OptimizingCompiler::MaybeRunInliner(HGraph* graph,
-                                         CodeGenerator* codegen,
-                                         const DexCompilationUnit& dex_compilation_unit,
-                                         PassObserver* pass_observer,
-                                         VariableSizedHandleScope* handles) const {
-  const CompilerOptions& compiler_options = GetCompilerDriver()->GetCompilerOptions();
-  bool should_inline = (compiler_options.GetInlineMaxCodeUnits() > 0);
-  if (!should_inline) {
-    return;
-  }
-  OptimizationDef optimizations[] = {
-    OptDef(OptimizationPass::kInliner)
-  };
-  RunOptimizations(graph,
-                   codegen,
-                   dex_compilation_unit,
-                   pass_observer,
-                   handles,
-                   optimizations);
-}
-
-void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
+bool OptimizingCompiler::RunArchOptimizations(HGraph* graph,
                                               CodeGenerator* codegen,
                                               const DexCompilationUnit& dex_compilation_unit,
                                               PassObserver* pass_observer,
@@ -471,13 +469,12 @@ void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
         OptDef(OptimizationPass::kGlobalValueNumbering, "GVN$after_arch"),
         OptDef(OptimizationPass::kScheduling)
       };
-      RunOptimizations(graph,
-                       codegen,
-                       dex_compilation_unit,
-                       pass_observer,
-                       handles,
-                       arm_optimizations);
-      break;
+      return RunOptimizations(graph,
+                              codegen,
+                              dex_compilation_unit,
+                              pass_observer,
+                              handles,
+                              arm_optimizations);
     }
 #endif
 #ifdef ART_ENABLE_CODEGEN_arm64
@@ -488,13 +485,12 @@ void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
         OptDef(OptimizationPass::kGlobalValueNumbering, "GVN$after_arch"),
         OptDef(OptimizationPass::kScheduling)
       };
-      RunOptimizations(graph,
-                       codegen,
-                       dex_compilation_unit,
-                       pass_observer,
-                       handles,
-                       arm64_optimizations);
-      break;
+      return RunOptimizations(graph,
+                              codegen,
+                              dex_compilation_unit,
+                              pass_observer,
+                              handles,
+                              arm64_optimizations);
     }
 #endif
 #ifdef ART_ENABLE_CODEGEN_mips
@@ -505,13 +501,12 @@ void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
         OptDef(OptimizationPass::kGlobalValueNumbering, "GVN$after_arch"),
         OptDef(OptimizationPass::kPcRelativeFixupsMips)
       };
-      RunOptimizations(graph,
-                       codegen,
-                       dex_compilation_unit,
-                       pass_observer,
-                       handles,
-                       mips_optimizations);
-      break;
+      return RunOptimizations(graph,
+                              codegen,
+                              dex_compilation_unit,
+                              pass_observer,
+                              handles,
+                              mips_optimizations);
     }
 #endif
 #ifdef ART_ENABLE_CODEGEN_mips64
@@ -520,13 +515,12 @@ void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
         OptDef(OptimizationPass::kSideEffectsAnalysis),
         OptDef(OptimizationPass::kGlobalValueNumbering, "GVN$after_arch")
       };
-      RunOptimizations(graph,
-                       codegen,
-                       dex_compilation_unit,
-                       pass_observer,
-                       handles,
-                       mips64_optimizations);
-      break;
+      return RunOptimizations(graph,
+                              codegen,
+                              dex_compilation_unit,
+                              pass_observer,
+                              handles,
+                              mips64_optimizations);
     }
 #endif
 #ifdef ART_ENABLE_CODEGEN_x86
@@ -537,13 +531,12 @@ void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
         OptDef(OptimizationPass::kPcRelativeFixupsX86),
         OptDef(OptimizationPass::kX86MemoryOperandGeneration)
       };
-      RunOptimizations(graph,
-                       codegen,
-                       dex_compilation_unit,
-                       pass_observer,
-                       handles,
-                       x86_optimizations);
-      break;
+      return RunOptimizations(graph,
+                              codegen,
+                              dex_compilation_unit,
+                              pass_observer,
+                              handles,
+                              x86_optimizations);
     }
 #endif
 #ifdef ART_ENABLE_CODEGEN_x86_64
@@ -553,17 +546,16 @@ void OptimizingCompiler::RunArchOptimizations(HGraph* graph,
         OptDef(OptimizationPass::kGlobalValueNumbering, "GVN$after_arch"),
         OptDef(OptimizationPass::kX86MemoryOperandGeneration)
       };
-      RunOptimizations(graph,
-                       codegen,
-                       dex_compilation_unit,
-                       pass_observer,
-                       handles,
-                       x86_64_optimizations);
-      break;
+      return RunOptimizations(graph,
+                              codegen,
+                              dex_compilation_unit,
+                              pass_observer,
+                              handles,
+                              x86_64_optimizations);
     }
 #endif
     default:
-      break;
+      return false;
   }
 }
 
@@ -610,6 +602,7 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
   if (pass_names != nullptr) {
     // If passes were defined on command-line, build the optimization
     // passes and run these instead of the built-in optimizations.
+    // TODO: a way to define depends_on via command-line?
     const size_t length = pass_names->size();
     std::vector<OptimizationDef> optimizations;
     for (const std::string& pass_name : *pass_names) {
@@ -626,49 +619,64 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
     return;
   }
 
-  OptimizationDef optimizations1[] = {
+  OptimizationDef optimizations[] = {
+    // Initial optimizations.
     OptDef(OptimizationPass::kIntrinsicsRecognizer),
     OptDef(OptimizationPass::kSharpening),
     OptDef(OptimizationPass::kConstantFolding),
     OptDef(OptimizationPass::kInstructionSimplifier),
-    OptDef(OptimizationPass::kDeadCodeElimination, "dead_code_elimination$initial")
-  };
-  RunOptimizations(graph,
-                   codegen,
-                   dex_compilation_unit,
-                   pass_observer,
-                   handles,
-                   optimizations1);
-
-  MaybeRunInliner(graph, codegen, dex_compilation_unit, pass_observer, handles);
-
-  OptimizationDef optimizations2[] = {
-    // SelectGenerator depends on the InstructionSimplifier removing
-    // redundant suspend checks to recognize empty blocks.
-    OptDef(OptimizationPass::kSelectGenerator),
-    // TODO: if we don't inline we can also skip fold2.
-    OptDef(OptimizationPass::kConstantFolding,       "constant_folding$after_inlining"),
-    OptDef(OptimizationPass::kInstructionSimplifier, "instruction_simplifier$after_inlining"),
-    OptDef(OptimizationPass::kDeadCodeElimination,   "dead_code_elimination$after_inlining"),
-    OptDef(OptimizationPass::kSideEffectsAnalysis,   "side_effects$before_gvn"),
+    OptDef(OptimizationPass::kDeadCodeElimination,
+           "dead_code_elimination$initial"),
+    // Inlining.
+    OptDef(OptimizationPass::kInliner),
+    // Simplification (only if inlining occurred).
+    OptDef(OptimizationPass::kConstantFolding,
+           "constant_folding$after_inlining",
+           OptimizationPass::kInliner),
+    OptDef(OptimizationPass::kInstructionSimplifier,
+           "instruction_simplifier$after_inlining",
+           OptimizationPass::kInliner),
+    OptDef(OptimizationPass::kDeadCodeElimination,
+           "dead_code_elimination$after_inlining",
+           OptimizationPass::kInliner),
+    // GVN.
+    OptDef(OptimizationPass::kSideEffectsAnalysis,
+           "side_effects$before_gvn"),
     OptDef(OptimizationPass::kGlobalValueNumbering),
+    // Simplification (TODO: only if GVN occurred).
+    OptDef(OptimizationPass::kSelectGenerator),
+    OptDef(OptimizationPass::kConstantFolding,
+           "constant_folding$after_gvn"),
+    OptDef(OptimizationPass::kInstructionSimplifier,
+           "instruction_simplifier$after_gvn"),
+    OptDef(OptimizationPass::kDeadCodeElimination,
+           "dead_code_elimination$after_gvn"),
+    // High-level optimizations.
+    OptDef(OptimizationPass::kSideEffectsAnalysis,
+           "side_effects$before_licm"),
     OptDef(OptimizationPass::kInvariantCodeMotion),
     OptDef(OptimizationPass::kInductionVarAnalysis),
     OptDef(OptimizationPass::kBoundsCheckElimination),
     OptDef(OptimizationPass::kLoopOptimization),
-    // Evaluates code generated by dynamic bce.
-    OptDef(OptimizationPass::kConstantFolding,       "constant_folding$after_bce"),
-    OptDef(OptimizationPass::kInstructionSimplifier, "instruction_simplifier$after_bce"),
-    OptDef(OptimizationPass::kSideEffectsAnalysis,   "side_effects$before_lse"),
+    // Simplification.
+    OptDef(OptimizationPass::kConstantFolding,
+           "constant_folding$after_bce"),
+    OptDef(OptimizationPass::kInstructionSimplifier,
+           "instruction_simplifier$after_bce"),
+    // Other high-level optimizations.
+    OptDef(OptimizationPass::kSideEffectsAnalysis,
+           "side_effects$before_lse"),
     OptDef(OptimizationPass::kLoadStoreAnalysis),
     OptDef(OptimizationPass::kLoadStoreElimination),
     OptDef(OptimizationPass::kCHAGuardOptimization),
-    OptDef(OptimizationPass::kDeadCodeElimination,   "dead_code_elimination$final"),
+    OptDef(OptimizationPass::kDeadCodeElimination,
+           "dead_code_elimination$final"),
     OptDef(OptimizationPass::kCodeSinking),
     // The codegen has a few assumptions that only the instruction simplifier
     // can satisfy. For example, the code generator does not expect to see a
     // HTypeConversion from a type to the same type.
-    OptDef(OptimizationPass::kInstructionSimplifier, "instruction_simplifier$before_codegen"),
+    OptDef(OptimizationPass::kInstructionSimplifier,
+           "instruction_simplifier$before_codegen"),
     // Eliminate constructor fences after code sinking to avoid
     // complicated sinking logic to split a fence with many inputs.
     OptDef(OptimizationPass::kConstructorFenceRedundancyElimination)
@@ -678,7 +686,7 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
                    dex_compilation_unit,
                    pass_observer,
                    handles,
-                   optimizations2);
+                   optimizations);
 
   RunArchOptimizations(graph, codegen, dex_compilation_unit, pass_observer, handles);
 }
